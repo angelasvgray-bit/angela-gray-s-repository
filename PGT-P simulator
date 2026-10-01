@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Designer Dilemma: PGT-P Simulator</title>
+    <style>
+        :root {
+            --bg: #0f0f0f;
+            --panel: #1a1a1a;
+            --text: #e0e0e0;
+            --accent: #c5a059;
+            --danger: #ff4d4d;
+            --safe: #4dff88;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'serif';
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            height: 100vh;
+        }
+
+        header { padding: 20px; text-align: center; }
+        h1 { color: var(--accent); letter-spacing: 2px; margin: 0; }
+
+        main {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            width: 95%;
+            max-width: 1200px;
+            height: 70vh;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid #333;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .stat-item { margin-bottom: 20px; }
+        .stat-label { font-size: 0.8rem; color: #888; text-transform: uppercase; }
+        .stat-bar {
+            width: 100%;
+            height: 12px;
+            background: #333;
+            margin-top: 5px;
+            border-radius: 4px;
+        }
+        .stat-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+
+        #event-log {
+            font-size: 0.85rem;
+            height: 150px;
+            background: #000;
+            padding: 10px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            margin-top: 10px;
+        }
+
+        .decision-card {
+            background: #252525;
+            padding: 20px;
+            border-left: 4px solid var(--accent);
+            margin-bottom: 20px;
+        }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+
+        button {
+            padding: 10px 20px;
+            cursor: pointer;
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var.accent;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        button:hover { background: var(--accent); color: #000; }
+
+        #overlay {
+            position: fixed;
+            top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            text-align: center;
+        }
+
+        .modal { max-width: 500px; padding: 30px; border: 1px solid var(--accent); }
+    </style>
+</head>
+<body>
+
+<div id="overlay">
+    <div class="modal">
+        <h1>The Designer Dilemma</h1>
+        <p>You are planning a family. PGT-P (Polygenic Embryo Screening) is available to rank embryos for desirable traits.</p>
+        <p><strong>Goal:</strong> Navigate the social pressure and economic costs without losing your humanity.</p>
+        <button onclick="startGame()">Begin Journey</button>
+    </div>
+</div>
+
+<header>
+    <h1>PGT-P Simulator</h1>
+</header>
+
+<main>
+    <!-- Left: Status -->
+    <div class="panel">
+        <h3>Parental Status</h3>
+        
+        <div class="stat-item">
+            <div class="stat-label">Financial Stability (Economic Divide)</div>
+            <div class="stat-bar"><div id="bar-wealth" class="stat-fill" style="width: 100%; background: #4dff88;"></div></div>
+        </div>
+
+        <div class="stat-item">
+            <div class="stat-label">Social Norm Compliance (Stigma)</div>
+            <div class="stat-bar"><div id="bar-stigma" class="stat-fill" style="width: 10%; background: #ffcc00;"></div></div>
+        </div>
+
+        <div class="stat-item">
+            <div class="stat-label">Moral Complexity (Ethical Risk)</div>
+            <div class="stat-bar"><div id="bar-moral" class="stat-fill" style="width: 0%; background: #ff4d4d;"></div></div>
+        </div>
+
+        <div id="event-log">
+            [SYSTEM] Journey started...
+        </div>
+    </div>
+
+    <!-- Right: Decisions -->
+    <div class        class="panel">
+        <div id="decision-area">
+            <div class="decision-card">
+                <p><strong>Scenario 1: The Initial Consultation</strong></p>
+                <p>Your IVF clinic suggests PGT-P to "optimize" your future child's height and cognitive potential. It will cost $15,000.</p>
+                <div class="btn-group">
+                    <button onclick="makeChoice('wealth', -15, 'stigma', +20, 'moral', +10, 'You chose PGT-P. Your wealth is depleted, but you feel more prepared for social norms.')">Accept PGT-P</button>
+                    <button onclick="makeChoice('wealth', 0, 'stigma', -10, 'moral', 0, 'You declined. You feel a sense of autonomy, but neighbors hint at your irresponsibility.')">Decline PGT-P</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    let stats = { wealth: 100, stigma: 10, moral: 0 };
+
+    const scenarios = [
+        {
+            text: "<strong>Scenario 2: The Peer Pressure</strong><br><br>A close friend's child was 'optimized' for high intelligence. They are thriving. You feel the 'technological imperative' pressing on you.",
+            options: [
+                { text: "Order extra screening", effect: { wealth: -20, stigma: +25, moral: +15 }, msg: "You spent more to keep up. The divide widens." },
+                { text: "Stay the course", effect: { wealth: 0, stigma: -15, moral: -5 }, msg: "You stayed true to your values, but the social gap feels wider." }
+            ]
+        },
+        {
+            text: "<strong>Scenario 3: The Economic Toll</strong><br><br>Unexpected medical bills have arrived. Your PGT-P investment is weighing heavily on your savings.",
+            options: [
+                { text: "Take out a loan", effect: { wealth: -30, stigma: +5, moral: 0 }, msg: "Debt is mounting. The cost of 'optimal' children is high." },
+                { text: "Cut back on essentials", effect: { wealth: -10, stigma: 0, moral: 0 }, msg: "You are sacrificing current stability for future predictions." }
+            ]
+        },
+        {
+            text: "<strong>Scenario 4: The Moral Weight</strong><br><br>You realize you are no longer choosing a child, but designing a 'product' to ensure success.",
+            options: [
+                { text: "Accept the logic", effect: { wealth: 0, stigma: +10, moral: +30 }, msg: "You have embraced selective pronatalism." },
+                { text: "Question the ethics", effect: { wealth: 0, stigma: -20, moral: -10 }, msg: "You feel a sense of moral clarity, but social isolation grows." }
+            ]
+        }
+    ];
+
+    let currentScenarioIndex = 1;
+
+    function startGame() {
+        document.getElementById('overlay').style.display = 'none';
+    }
+
+    function makeChoice(type, val, type2, val2, type3, val3, logMsg) {
+        // Update Stats
+        if(type === 'wealth') stats.wealth += val;
+        if(type === 'stigma') stats.stigma += val2;
+        if(type === 'moral') stats.moral += val3;
+
+        // Clamp values
+        stats.wealth = Math.max(0, Math.min(100, stats.wealth));
+        stats.stigma = Math.max(0, Math.min(100, stats.stigma));
+        stats.moral = Math.max(0, Math.min(100, stats.moral));
+
+        // Update UI
+        updateUI();
+        
+        // Add Log
+        const log = document.getElementById('event-log');
+        log.innerHTML += `<div>[EVENT] ${logMsg}</div>`;
+        log.scrollTop = log.scrollHeight;
+
+        // Next Scenario
+        if(currentScenarioIndex < scenarios.length) {
+            renderScenario(currentScenarioIndex);
+            currentScenarioIndex++;
+        } else {
+            endGame();
+        }
+    }
+
+    // Wrapper for the specific buttons in Scenario 1
+    function makeChoice(t, v, t2, v2, t3, v3, m) {
+        // This is a hack to make the Scenario 1 buttons work with the general engine
+        // In a real app, I'd use a cleaner object-based system
+        const effects = {
+            wealth: v,
+            stigma: v2,
+            moral: v3
+        };
+        
+        // The original Scenario 1 buttons are hardcoded, 
+        // so we manually handle their logic here:
+        if(m.includes("You chose PGT-P")) {
+            stats.wealth -= 15; stats.stigma += 20; stats.moral += 10;
+        } else {
+            stats.stigma -= 10; stats.moral -= 5;
+        }
+        
+        updateUI();
+        const log = document.getElementById('event-log');
+        log.innerHTML += `<div>[EVENT] ${m}</div>`;
+        log.scrollTop = log.scrollHeight;
+
+        if(currentScenarioIndex < scenarios.length) {
+            renderScenario(currentScenarioIndex);
+            currentScenarioIndex++;
+        } else {
+            endGame();
+        }
+    }
+
+    function renderScenario(index) {
+        const scenario = scenarios[index];
+        const area = document.getElementById('decision-area');
+        
+        let buttonsHTML = '';
+        scenario.options.forEach((opt, i) => {
+            // This is a bit messy because of how JS handles functions in strings, 
+            // but for this "easy" version it works.
+            const effectArgs = JSON.stringify(opt.effect);
+            buttonsHTML += `<button onclick='handleGenericChoice(${index}, ${i})'>${opt.text}</button>`;
+        });
+
+        area.innerHTML = `
+            <div class="decision-card">
+                <p>${scenario.text}</p>
+                <div class="btn-group">${buttonsHTML}</div>
+            </div>
+        `;
+    }
+
+    // Helper for the dynamic buttons
+    function handleGenericChoice(sIdx, oIdx) {
+        const opt = scenarios[sIdx].options[oIdx];
+        
+        stats.wealth += opt.effect.wealth || 0;
+        stats.stigma += opt.effect.stigma || 0;
+        stats.moral += opt.effect.moral || 0;
+
+        stats.wealth = Math.max(0, Math.min(100, stats.wealth));
+        stats.stigma = Math.max(0, Math.min(100, stats.stigma));
+        stats.moral = Math.max(0, Math.min(100, stats.moral));
+
+        updateUI();
+        const log = document.getElementById('event-log');
+        log.innerHTML += `<div>[EVENT] ${opt.msg}</div>`;
+        log.scrollTop = log.scrollHeight;
+
+        if(sIdx + 1 < scenarios.length) {
+            renderScenario(sIdx + 1);
+        } else {
+            endGame();
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('bar-wealth').style.width = stats.wealth + '%';
+        document.getElementById('bar-stigma').style.width = stats.stigma + '%';
+        document.getElementById('bar-moral').style.width = stats.moral + '%';
+    }
+
+    function endGame() {
+        const area = document.getElementById('decision-area');
+        let result = "";
+        if (stats.wealth < 30) result = "You have fallen into economic hardship due to the costs of selection.";
+        else if (stats.stigma > 70) result = "You are highly compliant with social norms, but have lost your autonomy.";
+        else if (stats.moral > 70) result = "You have embraced selective pronatalism, prioritizing specific traits over equality.";
+        else result = "You have navigated the divide, balancing choice and responsibility.";
+
+        area.innerHTML = `
+            <div class="decision-card">
+                <h2>Simulation Complete</h2>
+                <p>${result}</p>
+                <button onclick="location.reload()">Restart</button>
+            </div>
+        `;
+    }
+
+    // Override Scenario 1's hardcoded buttons for the demo
+    // We re-define the button logic to use the generic handler
+    window.makeChoice = function(t, v, t2, v2, t3, v3, m) {
+        // Implementation moved into handleGenericChoice for simplicity
+    };
+    // Wait, let's just fix the Scenario 1 buttons in the HTML to use the handler
+    // Since I can't edit the HTML after it's rendered, I'll fix it via JS:
+    
+    window.onload = () => {
+        const buttons = document.querySelectorAll('.btn-group button');
+        if(buttons.length === 2) {
+            buttons[0].setAttribute('onclick', "handleGenericChoice(0, 0)");
+            buttons[1].setAttribute('onclick', "handleGenericChoice(0, 1)");
+        }
+    };
+
+</script>
+</body>
+</html>
+```<turn|>

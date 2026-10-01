@@ -1,0 +1,386 @@
+
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+							<style>
+								body {
+									background-color: white; /* Ensure the iframe has a white background */
+								}
+
+								
+							</style>
+                        </head>
+                        <body>
+                            <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cubist Canvas | Picasso Transformer</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --accent: #e63946;
+            --panel: #1e1e1e;
+            --text: #f1faee;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-size: 1.5rem;
+            color: var(--accent);
+        }
+
+        .main-container {
+            display: flex;
+            gap: 20px;
+            padding: 10px;
+            width: 95%;
+            height: 75vh;
+            justify-content: center;
+        }
+
+        .toolbar {
+            background: var(--panel);
+            padding: 20px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 150px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .canvas-container {
+            position: relative;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .tool-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        label { font-size: 0.7rem; color: #888; text-transform: uppercase; }
+
+        input[type="color"] {
+            width: 100%;
+            height: 40px;
+            border: none;
+            background: none;
+            cursor: pointer;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+
+        button {
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+        }
+
+        .btn-transform {
+            background: var(--accent);
+            color: white;
+            margin-top: auto;
+        }
+
+        .btn-transform:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px var(--accent);
+        }
+
+        .btn-clear {
+            background: #444;
+            color: white;
+        }
+
+        .btn-download {
+            background: #2a9d8f;
+            color: white;
+        }
+
+        .status-msg {
+            position: fixed;
+            bottom: 20px;
+            color: #888;
+            font-size: 0.8rem;
+        }
+
+        /* Loading overlay */
+        #loader {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            font-weight: bold;
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Cubist Canvas</h1>
+</header>
+
+<div class="main-container">
+    <div class="toolbar">
+        <div class="tool-group">
+            <label>Color</label>
+            <input type="color" id="colorPicker" value="#000000">
+        </div>
+
+        <div class="tool-group">
+            <label>Brush Size</label>
+            <input type="range" id="brushSize" min="2" max="50" value="10">
+        </div>
+
+        <div class="tool-group">
+            <label>Complexity</label>
+            <input type="range" id="fragmentSize" min="5" max="40" value="20">
+        </div>
+
+        <button class="btn-clear" onclick="clearCanvas()">Clear</button>
+        <button class="btn-download" onclick="downloadCanvas()">Save Art</button>
+        <button class="btn-transform" onclick="transformToPicasso()">Transform</button>
+    </div>
+
+    <div class="canvas-container">
+        <div id="loader">FRAGMENTING REALITY...</div>
+        <canvas id="drawingCanvas"></canvas>
+    </div>
+</div>
+
+<div class="status-msg">Draw something, then click TRANSFORM to enter the Cubist dimension.</div>
+
+<script>
+    const canvas = document.getElementById('drawingCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const loader = document.getElementById('loader');
+    
+    // Setup Canvas dimensions
+    canvas.width = 800;
+    canvas.height = 600;
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    let drawing = false;
+
+    // --- DRAWING LOGIC ---
+
+    function getCoords(e) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+    }
+
+    function startDrawing(e) {
+        drawing = true;
+        draw(e);
+    }
+
+    function stopDrawing() {
+        drawing = false;
+        ctx.beginPath();
+    }
+
+    function draw(e) {
+        if (!drawing) return;
+        
+        const coords = getCoords(e);
+        const color = document.getElementById('colorPicker').value;
+        const size = document.getElementById('brushSize').value;
+
+        ctx.lineWidth = size;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = color;
+
+        ctx.lineTo(coords.x, coords.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(coords.x, coords.y);
+    }
+
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+
+    function clearCanvas() {
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function downloadCanvas() {
+        const link = document.createElement('a');
+        link.download = 'picasso-art.png';
+        link.href = canvas.toDataURL();
+        link.click();
+    }
+
+    // --- THE PICASSO ENGINE (ALGORITHMIC CUBISM) ---
+
+    async function transformToPicasso() {
+        loader.style.display = 'flex';
+        
+        // Small delay to allow UI to show loader
+        await new Promise(r => setTimeout(r, 100));
+
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        // 1. Capture original drawing
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const pixels = imageData.data;
+
+        // 2. Prepare for transformation
+        // Create a temporary canvas to hold the shards
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        const tCtx = tempCanvas.getContext('2d');
+        
+        // Clear background for the new art
+        tCtx.fillStyle = "#f4f1ea"; // Aged paper color
+        tCtx.fillRect(0, 0, width, height);
+
+        const fragmentScale = parseInt(document.getElementById('fragmentSize').value);
+
+        // 3. Fragmentation Loop
+        // We iterate through the canvas in a grid, but instead of squares, 
+        // we draw randomized quadrilaterals (shards).
+        for (let y = 0; y < height; y += fragmentScale) {
+            for (let x = 0; x < width; x += fragmentScale) {
+                
+                // Sample color from the original drawing at this point
+                const pixelIdx = (Math.floor(y) * width + Math.floor(x)) * 4;
+                const r = pixels[pixelIdx];
+                const g = pixels[pixelIdx + 1];
+                const b = pixels[pixelIdx + 2];
+                const a = pixels[pixelIdx + 3];
+
+                // Only process if the pixel isn't pure white (background)
+                // or if we want a more "filled" cubist look, process everything.
+                if (a > 10) {
+                    drawShard(tCtx, x, y, fragmentScale, r, g, b);
+                }
+            }
+        }
+
+        // 4. Final Touches: Add "Heavy Outline" and "Multiple Perspective" layer
+        applyCubistStyling(tCtx, width, height);
+
+        // 5. Render back to main canvas
+        ctx.drawImage(tempCanvas, 0, 0);
+        
+        loader.style.display = 'none';
+    }
+
+    function drawShard(ctx, x, y, size, r, g, b) {
+        ctx.save();
+        
+        // Add random rotation and jitter to the "shard"
+        const jitter = 0.5;
+        const rotation = (Math.random() - 0.5) * jitter;
+        const offsetX = (Math.random() - 0.5) * size;
+        const offsetY = (Math.random() - 0.5) * size;
+
+        ctx.translate(x + size/2 + offsetX, y + size/2 + offsetY);
+        ctx.rotate(rotation);
+
+        // Create a non-rectangular shape (a quadrilateral)
+        ctx.beginPath();
+        ctx.moveTo(-size/2 + (Math.random()*10), -size/2 + (Math.random()*10));
+        ctx.lineTo(size/2 + (Math.random()*10), -size/2 + (Math.random()*10));
+        ctx.lineTo(size/2 + (Math.random()*10), size/2 + (Math.random()*10));
+        ctx.lineTo(-size/2 + (Math.random()*10), size/2 + (Math.random()*10));
+        ctx.closePath();
+
+        // Apply color with slight "painterly" variance
+        const variance = 20;
+        const colorVar = () => (Math.random() - 0.5) * variance;
+        ctx.fillStyle = `rgba(${r + colorVar()}, ${g + colorVar()}, ${b + colorVar()}, 0.85)`;
+        
+        ctx.fill();
+        
+        // Add a subtle, dark outline to the shard
+        ctx.strokeStyle = "rgba(0,0,0,0.2)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    function applyCubistStyling(ctx, width, height) {
+        // Add heavy black lines in some areas to mimic Cubist structure
+        ctx.strokeStyle = "rgba(0,0,0,0.6)";
+        ctx.lineWidth = 3;
+        
+        for(let i = 0; i < 15; i++) {
+            ctx.beginPath();
+            ctx.moveTo(Math.random() * width, Math.random() * height);
+            ctx.lineTo(Math.random() * width, Math.random() * height);
+            ctx.stroke();
+        }
+
+        // Add a subtle "Canvas Texture" overlay
+        ctx.fillStyle = "rgba(0,0,0,0.03)";
+        for(let i = 0; i < width; i += 4) {
+            ctx.fillRect(i, 0, 1, height);
+        }
+    }
+</script>
+
+</body>
+</html>
+
+							<script>
+                            	
+							</script>
+                        </body>
+                        </html>
+                    

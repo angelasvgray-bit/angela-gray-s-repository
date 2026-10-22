@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ICSI scope display</title>
+<style>
+  :root {
+    --bg: #000; --fg: #cfcfcf; --muted: #8a8a8a; --panel: rgba(10,10,10,0.88); --line: #3a3a3a;
+    --cd: 130px; --br: 1.4; --rot: 0deg; --mx: 1;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #000; --fg: #cfcfcf; --muted: #8a8a8a; --panel: rgba(10,10,10,0.88); --line: #3a3a3a; }
+  }
+  :root[data-theme="dark"] { --bg: #000; --fg: #cfcfcf; --muted: #8a8a8a; --panel: rgba(10,10,10,0.88); --line: #3a3a3a; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 13px; }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; touch-action: none; }
+  #stage canvas {
+    display: block; max-width: none;
+    width: calc(var(--cd) * 600 / 570) !important; height: calc(var(--cd) * 600 / 570) !important;
+    transform: rotate(var(--rot)) scaleX(var(--mx));
+    filter: brightness(var(--br)) contrast(1.05);
+    touch-action: none; -webkit-tap-highlight-color: transparent; cursor: ew-resize;
+    transition: opacity 0.2s;
+  }
+  #lbl { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; transition: opacity 0.2s; }
+  #lbl text { font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #ececec; paint-order: stroke; stroke: #000; stroke-width: 3px; stroke-linejoin: round; }
+  #panel { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--panel); border-top: 1px solid var(--line);
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0; }
+  button { background: #1c1c1c; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: inherit; }
+  button:disabled { opacity: 0.35; }
+  input[type=range] { flex: 1; min-width: 120px; }
+  input[type=number] { width: 64px; background: #1c1c1c; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 5px; font: inherit; }
+  .m { color: var(--muted); }
+  #hint { color: var(--fg); font-size: 14px; }
+  #gear { display: none; position: fixed; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 5; opacity: 0.35; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+</head>
+<body>
+<div id="stage"></div>
+<svg id="lbl" aria-hidden="true"></svg>
+<button id="gear" aria-label="Show controls">controls</button>
+<div id="panel">
+  <div class="row"><span id="hint"></span></div>
+  <div class="row">
+    <button id="inject">Inject sperm</button>
+    <button id="reset">Start over</button>
+    <button id="newo">New oocyte</button>
+    <span id="lab" class="m"></span>
+  </div>
+  <div class="row">
+    <button id="labt">Labels</button>
+    <button id="rot">Rotate 180&deg;</button>
+    <button id="mir">Mirror</button>
+    <button id="full">Fullscreen</button>
+    <button id="hide">Hide</button>
+  </div>
+  <div class="row"><span class="m">Circle size</span><button id="smaller" aria-label="Smaller">&minus;</button><input type="range" id="sz" min="60" max="1600" step="1"><button id="larger" aria-label="Larger">+</button><span id="szo"></span></div>
+  <div class="row"><span class="m">Brightness</span><input type="range" id="br" min="0.6" max="3" step="0.1" value="1.4"><span id="bro"></span></div>
+  <div class="row">
+    <span class="m">Calibrate: target</span><input type="number" id="tgt" value="25" min="1" step="0.5"><span class="m">mm, measured</span><input type="number" id="meas" min="1" step="0.5" placeholder="mm"><button id="apply">Apply</button><span id="cal" class="m"></span>
+  </div>
+  <div class="row m">Drag the picture to move the needle (or hold the left and right arrow keys). Space = inject, R = start over, N = new oocyte, L = labels.</div>
+</div>
+<script>
+// ICSI under Hoffman modulation contrast, driven by the user.
+//
+// ICSI is done on a mature (MII) oocyte: thick zona pellucida, narrow
+// perivitelline space, polar body at 12 o'clock, granular ooplasm. A holding
+// pipette grips it on the left; the injection needle comes in from the right
+// (3 o'clock) with a sperm inside it.
+//
+// The user performs the injection: drag left to push the needle through the
+// zona and into the oocyte (the sperm slides toward the tip), press Inject to
+// release the sperm, then drag right to withdraw the needle.
+//
+// Everything is a height map (optical path difference) shaded by its slope
+// along one diagonal, which is what makes transparent glass and cells look
+// 3D in Hoffman optics. Pipettes are hollow glass tubes, so their walls get
+// the right bright and dark edge lines.
+//
+// The first build is spread over a couple of seconds of frames. After that,
+// each needle movement only re-renders a thin strip around the needle.
+
+let noiseLevel = 255;
+let noiseScale = 0.009;
+
+const W = 400;
+const H = 400;
+const VIEW = 600;
+const GRAIN = 720;
+const N = 720;
+const TAU = Math.PI * 2;
+const ROWS = 5;
+const PARTIAL_ROWS = 20;
+const SHADE_ROWS = 35;
+const GRAIN_ROWS = 40;
+
+// Layout (height-map pixels, about 0.7 micrometres each)
+const CXO = 204;
+const CYO = 200;
+const XF = CXO - 98;
+const ROH = 70;
+const RIH = 16;
+const NY = CYO - 1;
+
+// Thin strip that changes when the needle or sperm moves
+const Y0 = CYO - 34;
+const Y1 = CYO + 34;
+const X0 = CXO + 20;
+
+// Keyframes 0 to 8: needle advancing with the sperm in its bore.
+// Keyframes 9 to 12: sperm released, needle withdrawing.
+// Offsets are measured from the oocyte centre.
+const STEPS = 13;
+const TIP = [136, 118, 104, 94, 85, 76, 66, 54, 42, 42, 64, 96, 128];
+const SPERM_ABS = [182, 160, 142, 128, 115, 102, 88, 73, 58, 34, 34, 34, 34];
+const TAIL = [52, 52, 52, 52, 52, 52, 52, 52, 52, 30, 30, 30, 30];
+const FUN = [0, 0, 0, 0, 0, 0, 7, 19, 8, 6, 3, 0, 0];
+const LABELS = [
+  'Approach', 'Approach', 'Approach', 'Needle touches zona', 'Needle through zona',
+  'At the oolemma', 'Indenting oolemma', 'Deep indentation', 'Membrane breached',
+  'Sperm released', 'Withdrawing needle', 'Withdrawing needle', 'Injection complete'
+];
+
+let emb;
+let bg;
+let grainImg;
+let hmap;
+let bRp = [], bZi = [], bZo = [];
+let Rp = [], Zi = [], Zo = [];
+let specks = [];
+let pbx = 0, pby = 0, pbr = 7.5;
+let hseed = 0;
+let pos = 0; // what is drawn right now
+let targetPos = 0; // where the user wants the needle
+let phase = 0; // 0 = sperm still in the needle, 1 = sperm released
+let releasing = false;
+let releaseStart = 0;
+let dragTip0 = 136;
+let tipX = 0;
+let spermX = 0;
+let tailLen = 52;
+let tailAmp = 1.2;
+
+// 0 = making grain, 1 = height map, 2 = shading, 3 = ready
+let stage = 0;
+let partial = false;
+let buildRow = 0;
+let grainRow = 0;
+
+function setup() {
+  createCanvas(VIEW, VIEW).parent('stage');
+  pixelDensity(1);
+  noiseDetail(3, 0.5);
+
+  bg = createGraphics(100, 100);
+  bg.pixelDensity(1);
+
+  grainImg = createGraphics(GRAIN, GRAIN);
+  grainImg.pixelDensity(1);
+  grainImg.loadPixels();
+
+  emb = createImage(W, H);
+
+  startBuild();
+
+  describe('A grayscale microscope view of ICSI. The viewer drags to push an injection needle carrying a sperm through the zona pellucida of an oocyte held by a glass pipette, presses a button to release the sperm, then drags to withdraw the needle.');
+}
+
+function startPartial() {
+  partial = true;
+  stage = 1;
+  buildRow = Y0;
+}
+
+// ---- User control ---------------------------------------------------------
+
+// Convert a wanted needle tip position into an animation position.
+function moveNeedleTo(tipOff) {
+  if (releasing) return;
+  if (phase === 0) {
+    tipOff = constrain(tipOff, TIP[8], TIP[0]);
+    for (let i = 0; i < 8; i++) {
+      if (tipOff <= TIP[i] && tipOff >= TIP[i + 1]) {
+        targetPos = i + (TIP[i] - tipOff) / (TIP[i] - TIP[i + 1]);
+        return;
+      }
+    }
+  } else {
+    tipOff = constrain(tipOff, TIP[9], TIP[12]);
+    for (let i = 9; i < 12; i++) {
+      if (tipOff >= TIP[i] && tipOff <= TIP[i + 1]) {
+        targetPos = i + (tipOff - TIP[i]) / (TIP[i + 1] - TIP[i]);
+        return;
+      }
+    }
+  }
+}
+
+function beginDrag() {
+  dragTip0 = lerpK(TIP, targetPos);
+}
+
+// dbuf = how far the pointer moved to the right, in height-map pixels
+function dragTo(dbuf) {
+  moveNeedleTo(dragTip0 + dbuf);
+}
+
+function injectSperm() {
+  if (stage !== 3 || phase !== 0 || releasing || targetPos < 7.95) return;
+  releasing = true;
+  releaseStart = millis();
+}
+
+function resetProcedure() {
+  if (stage < 3 && !partial) return;
+  phase = 0;
+  releasing = false;
+  targetPos = 0;
+  pos = 0;
+  applyNeedle();
+  startPartial();
+}
+
+function newOocyte() {
+  if (stage === 3) startBuild();
+}
+
+function keyPressed() {
+  let a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+  if (key === ' ') injectSperm();
+  else if (key === 'r' || key === 'R') {
+    if (typeof startOver === 'function') startOver();
+    else resetProcedure();
+  } else if (key === 'n' || key === 'N') newOocyte();
+  else if ((key === 'l' || key === 'L') && typeof toggleLabels === 'function') toggleLabels();
+}
+
+// Called every frame when the scene is ready.
+function follow() {
+  if (stage !== 3) return;
+
+  let a = document.activeElement;
+  let typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
+  if (!typing && !releasing) {
+    if (keyIsDown(LEFT_ARROW)) moveNeedleTo(lerpK(TIP, targetPos) - 1.2);
+    else if (keyIsDown(RIGHT_ARROW)) moveNeedleTo(lerpK(TIP, targetPos) + 1.2);
+  }
+
+  if (releasing) {
+    let p = (millis() - releaseStart) / 900;
+    if (p >= 1) {
+      releasing = false;
+      phase = 1;
+      targetPos = 9;
+    } else {
+      targetPos = 8 + p;
+    }
+  }
+
+  if (Math.abs(targetPos - pos) > 0.004) {
+    pos = targetPos;
+    applyNeedle();
+    startPartial();
+  }
+}
+
+// ---- Drawing --------------------------------------------------------------
+
+function draw() {
+  if (stage < 3) {
+    stepBuild();
+    if (!partial) {
+      showLoading();
+      return;
+    }
+  } else {
+    follow();
+  }
+
+  background(0);
+  let t = frameCount * 0.01;
+
+  drawingContext.save();
+  drawingContext.beginPath();
+  drawingContext.arc(VIEW / 2, VIEW / 2, 285, 0, TAU);
+  drawingContext.clip();
+
+  let ox = (noise(3, 4, t * 0.8) - 0.5) * 8;
+  let oy = (noise(5, 6, t * 0.8) - 0.5) * 8;
+  drawingContext.filter = 'blur(0.6px)';
+  image(emb, ox, oy, VIEW, VIEW);
+  drawingContext.filter = 'none';
+
+  drawCloud();
+  blendMode(SOFT_LIGHT);
+  tint(255, 150);
+  image(bg, 0, 0, VIEW, VIEW);
+  noTint();
+  blendMode(BLEND);
+
+  blendMode(OVERLAY);
+  tint(255, 80);
+  image(grainImg, -floor(random(100)), -floor(random(100)));
+  noTint();
+  blendMode(BLEND);
+
+  let g = drawingContext.createRadialGradient(VIEW / 2, VIEW / 2, 150, VIEW / 2, VIEW / 2, 285);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.55)');
+  drawingContext.fillStyle = g;
+  drawingContext.fillRect(0, 0, VIEW, VIEW);
+
+  drawingContext.restore();
+}
+
+// Your cloud loop, written into a 100x100 buffer with loadPixels.
+function drawCloud() {
+  bg.loadPixels();
+  for (let y = 0; y < 100; y += 1) {
+    for (let x = 0; x < 100; x += 1) {
+      let nx = noiseScale * x;
+      let ny = noiseScale * y;
+      let nt = noiseScale * frameCount;
+      let c = noiseLevel * noise(nx, ny, nt);
+      let i = (y * 100 + x) * 4;
+      bg.pixels[i] = c;
+      bg.pixels[i + 1] = c;
+      bg.pixels[i + 2] = c;
+      bg.pixels[i + 3] = 255;
+    }
+  }
+  bg.updatePixels();
+}
+
+function showLoading() {
+  let p = 0;
+  if (stage === 0) p = (grainRow / GRAIN) * 0.1;
+  if (stage === 1) p = 0.1 + (buildRow / H) * 0.7;
+  if (stage === 2) p = 0.8 + (buildRow / H) * 0.2;
+  background(0);
+  noStroke();
+  fill(200);
+  textAlign(CENTER, CENTER);
+  textSize(16);
+  text('Preparing slide... ' + floor(p * 100) + '%', width / 2, height / 2);
+}
+
+function stepBuild() {
+  if (stage === 0) {
+    for (let i = 0; i < GRAIN_ROWS && grainRow < GRAIN; i++) {
+      for (let x = 0; x < GRAIN; x++) {
+        let v = 128 + (random() + random() + random() - 1.5) * 40;
+        let k = (grainRow * GRAIN + x) * 4;
+        grainImg.pixels[k] = v;
+        grainImg.pixels[k + 1] = v;
+        grainImg.pixels[k + 2] = v;
+        grainImg.pixels[k + 3] = 255;
+      }
+      grainRow++;
+    }
+    if (grainRow >= GRAIN) {
+      grainImg.updatePixels();
+      stage = 1;
+    }
+  } else if (stage === 1) {
+    let end = partial ? Y1 : H - 1;
+    let xa = partial ? X0 : 0;
+    let n = partial ? PARTIAL_ROWS : ROWS;
+    for (let i = 0; i < n && buildRow <= end; i++) {
+      heightRow(buildRow, xa, W);
+      buildRow++;
+    }
+    if (buildRow > end) {
+      stage = 2;
+      buildRow = partial ? Y0 - 1 : 0;
+      emb.loadPixels();
+    }
+  } else if (stage === 2) {
+    let end = partial ? Y1 + 1 : H - 1;
+    let xa = partial ? X0 - 1 : 0;
+    for (let i = 0; i < SHADE_ROWS && buildRow <= end; i++) {
+      shadeRow(buildRow, xa, W);
+      buildRow++;
+    }
+    if (buildRow > end) {
+      emb.updatePixels();
+      stage = 3;
+      partial = false;
+    }
+  }
+}
+
+function hash(i) {
+  let s = Math.sin(i * 12.9898 + hseed) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function sg(u, w) {
+  return 1 / (1 + Math.exp(-u / w));
+}
+
+function wrap(a) {
+  return Math.atan2(Math.sin(a), Math.cos(a));
+}
+
+function lerpK(arr, p) {
+  let i = Math.min(STEPS - 2, Math.floor(p));
+  let f = p - i;
+  return arr[i] + (arr[i + 1] - arr[i]) * f;
+}
+
+function startBuild() {
+  noiseSeed(floor(random(1000000)));
+  hseed = random(1000);
+
+  for (let k = 0; k < N; k++) {
+    // phys is the real screen angle: 0 = right, -PI/2 = up, PI = left
+    let phys = (k / N) * TAU - Math.PI;
+    let cx = Math.cos(phys);
+    let sy = Math.sin(phys);
+    let n1 = noise(cx * 1.1 + 10, sy * 1.1 + 10);
+    let n2 = noise(cx * 1.3 + 40, sy * 1.3 + 40);
+    let n3 = noise(cx * 1.5 + 70, sy * 1.5 + 70);
+
+    let rp = 71 + (n1 - 0.5) * 5;
+    let zi = rp + 11 + (n2 - 0.5) * 4;
+    let zo = zi + 21 + (n3 - 0.5) * 4;
+
+    // Held on the left: the oocyte flattens against the pipette face
+    let dl = Math.abs(wrap(phys - Math.PI));
+    let cl = Math.cos(dl);
+    if (cl > 0.2) {
+      rp = Math.min(rp, 66 / cl);
+      zi = Math.min(zi, 77 / cl);
+      zo = Math.min(zo, 98 / cl);
+    }
+    // ...and a little dome is sucked into the bore
+    let gl = Math.exp(-(dl * dl) / 0.0144);
+    zo += 9 * gl;
+    zi += 9 * gl;
+    rp += 6 * gl;
+
+    // Polar body at 12 o'clock sits in the perivitelline space
+    let dp = Math.abs(wrap(phys + Math.PI / 2));
+    rp -= 3 * Math.exp(-(dp * dp) / 0.0144);
+    zi += 5 * Math.exp(-(dp * dp) / 0.0169);
+    zo += 3 * Math.exp(-(dp * dp) / 0.0225);
+
+    bRp[k] = rp;
+    bZi[k] = zi;
+    bZo[k] = zo;
+  }
+
+  let pbPhys = -Math.PI / 2 + 0.05;
+  let kp = floor(((pbPhys + Math.PI) / TAU) * N);
+  let pbDist = (bRp[kp] + bZi[kp]) / 2 + 1;
+  pbx = CXO + Math.cos(pbPhys) * pbDist;
+  pby = CYO + Math.sin(pbPhys) * pbDist;
+  pbr = 7.5;
+
+  specks = [];
+  for (let tries = 0; tries < 500; tries++) {
+    if (specks.length >= 30) break;
+    let px = random(W);
+    let py = random(H);
+    if (dist(px, py, CXO, CYO) > 135 && abs(py - CYO) > 45) {
+      specks.push({ x: px, y: py, r: random(0.8, 2.5), h: random(0.5, 1.2) });
+    }
+  }
+
+  phase = 0;
+  releasing = false;
+  targetPos = 0;
+  pos = 0;
+  applyNeedle();
+
+  hmap = new Float32Array(W * H);
+  partial = false;
+  buildRow = 0;
+  stage = grainRow >= GRAIN ? 1 : 0;
+}
+
+// Needle- and sperm-dependent part of the scene at the current position.
+function applyNeedle() {
+  let tipOff = lerpK(TIP, pos);
+  tipX = CXO + tipOff;
+  spermX = CXO + lerpK(SPERM_ABS, pos);
+  tailLen = lerpK(TAIL, pos);
+  tailAmp = 1.2 + 1.2 * constrain(pos - 8, 0, 1);
+  let fd = lerpK(FUN, pos);
+  let fw = 0.01 - 0.005 * constrain(pos - 7, 0, 1);
+  let zoD = constrain((106 - tipOff) / 8, 0, 1) * 4;
+  let ziD = constrain((84 - tipOff) / 8, 0, 1) * 5;
+
+  for (let k = 0; k < N; k++) {
+    let phys = (k / N) * TAU - Math.PI;
+    let dr2 = phys * phys;
+    Rp[k] = bRp[k] - fd * Math.exp(-dr2 / fw);
+    Zi[k] = bZi[k] - ziD * Math.exp(-dr2 / 0.0144);
+    Zo[k] = bZo[k] - zoD * Math.exp(-dr2 / 0.0225);
+  }
+}
+
+function heightRow(y, xa, xb) {
+  let dyc = y - CYO;
+
+  for (let x = xa; x < xb; x++) {
+    let dx = x - CXO;
+    let d = Math.sqrt(dx * dx + dyc * dyc);
+    let phys = Math.atan2(dyc, dx);
+    let k = Math.min(N - 1, (((phys + Math.PI) / TAU) * N) | 0);
+    let rp = Rp[k];
+    let zin = Zi[k];
+    let zout = Zo[k];
+    let v = 0;
+
+    // Zona pellucida
+    if (d > zin - 8 && d < zout + 8) {
+      let fiber = noise(k * 0.07, d * 0.06) - 0.5;
+      let body = sg(d - zin, 1.4) * (1 - sg(d - zout, 1.4));
+      v += 1.5 * body * (1 + 0.3 * fiber);
+      let e = (d - zin - 1.5) / 1.6;
+      v += 0.25 * Math.exp(-e * e);
+    }
+
+    // Ooplasm
+    if (d < rp + 4) {
+      let m = 1 - sg(d - rp, 0.9);
+      let q = Math.min(1, d / rp);
+      v += m * (0.9 + 0.35 * (1 - q * q));
+      v += m * (0.26 * (noise(x * 0.28, y * 0.28) - 0.5) + 0.14 * (noise(x * 0.08 + 50, y * 0.08) - 0.5));
+      let r = (d - rp) / 1.1;
+      v += 0.35 * Math.exp(-r * r);
+    }
+
+    // Polar body
+    let pdx = x - pbx;
+    let pdy = y - pby;
+    let pq2 = (pdx * pdx + pdy * pdy) / (pbr * pbr);
+    if (pq2 < 1.4) {
+      v += 1.2 * Math.pow(Math.max(0, 1 - pq2), 0.6);
+      v += 0.15 * (noise(x * 0.35, y * 0.35) - 0.5) * Math.max(0, 1.2 - pq2);
+    }
+
+    // Holding pipette: hollow glass tube (front wall + back wall)
+    if (x < XF + 3) {
+      let s = Math.abs(y - CYO);
+      if (s < ROH) {
+        let to = Math.sqrt(ROH * ROH - s * s);
+        let ti = s < RIH ? Math.sqrt(RIH * RIH - s * s) : 0;
+        v += 0.0125 * 2 * (to - ti) * (1 - sg(x - XF, 1.0));
+      }
+    }
+
+    // Injection needle
+    let dxn = x - tipX;
+    if (dxn > 0) {
+      let s = y - NY;
+      let ron = 1.0 + 4 * (1 - Math.exp(-dxn / 4)) + 0.03 * dxn;
+      if (Math.abs(s) < ron + 1) {
+        let rin = 0.72 * ron * sg(dxn - 8, 1.5);
+        let inBore = rin > 0.3 && Math.abs(s) < rin;
+        let to = Math.sqrt(Math.max(0, ron * ron - s * s));
+        let ti = inBore ? Math.sqrt(rin * rin - s * s) : 0;
+        v += 0.03 * 2 * (to - ti) * sg(dxn, 1.2);
+      }
+    }
+
+    // Sperm: oval head with a wavy tail. In the needle bore at first,
+    // then free in the ooplasm after release.
+    let sdx = x - spermX;
+    let ssy = y - NY;
+    if (ssy > -7 && ssy < 7 && sdx > -9 && sdx < tailLen + 6) {
+      v += 1.0 * Math.exp(-(sdx * sdx) / 20 - (ssy * ssy) / 4.5);
+      if (sdx > 3) {
+        let off = tailAmp * Math.sin(sdx * 0.45);
+        v += 0.45 * Math.exp(-((ssy - off) * (ssy - off)) / 0.5) * (1 - sg(sdx - tailLen, 3));
+      }
+    }
+
+    // Debris
+    for (let j = 0; j < specks.length; j++) {
+      let sp = specks[j];
+      let ex = x - sp.x;
+      let ey = y - sp.y;
+      let e2 = ex * ex + ey * ey;
+      if (e2 < 100) v += sp.h * Math.exp(-e2 / (sp.r * sp.r));
+    }
+
+    hmap[y * W + x] = v;
+  }
+}
+
+function shadeRow(y, xa, xb) {
+  for (let x = xa; x < xb; x++) {
+    let i = (y * W + x) * 4;
+    let val = 128;
+    if (x > 0 && y > 0 && x < W - 1 && y < H - 1) {
+      let g = hmap[(y + 1) * W + x + 1] - hmap[(y - 1) * W + x - 1];
+      let hv = hmap[y * W + x];
+      val = 128 + 80 * Math.tanh(0.85 * g) - 6 * Math.min(hv, 2.5);
+      val += (noise(x * 0.01 + 200, y * 0.01 + 200) - 0.5) * 10;
+    }
+    emb.pixels[i] = val;
+    emb.pixels[i + 1] = val;
+    emb.pixels[i + 2] = val;
+    emb.pixels[i + 3] = 255;
+  }
+}
+</script>
+<script>
+const $ = id => document.getElementById(id);
+const root = document.documentElement;
+let cd = 130, br = 1.4, rot = false, mir = false, labelsOn = true;
+
+function apply() {
+  root.style.setProperty('--cd', cd + 'px');
+  root.style.setProperty('--br', br);
+  root.style.setProperty('--rot', rot ? '180deg' : '0deg');
+  root.style.setProperty('--mx', mir ? -1 : 1);
+  $('sz').value = cd;
+  $('szo').textContent = Math.round(cd) + ' px';
+  $('bro').textContent = br.toFixed(1) + 'x';
+  $('rot').style.opacity = rot ? 1 : 0.6;
+  $('mir').style.opacity = mir ? 1 : 0.6;
+  $('labt').style.opacity = labelsOn ? 1 : 0.6;
+}
+
+function toggleLabels() {
+  labelsOn = !labelsOn;
+  apply();
+  drawLabels();
+}
+
+$('sz').oninput = e => { cd = +e.target.value; apply(); };
+$('smaller').onclick = () => { cd = Math.max(60, cd * 0.92); apply(); };
+$('larger').onclick = () => { cd = Math.min(1600, cd * 1.08); apply(); };
+$('br').oninput = e => { br = +e.target.value; apply(); };
+$('rot').onclick = () => { rot = !rot; apply(); };
+$('mir').onclick = () => { mir = !mir; apply(); };
+$('labt').onclick = () => toggleLabels();
+$('inject').onclick = () => injectSperm();
+$('newo').onclick = () => newOocyte();
+$('hide').onclick = () => { $('panel').style.display = 'none'; $('gear').style.display = 'block'; };
+$('gear').onclick = () => { $('panel').style.display = 'block'; $('gear').style.display = 'none'; };
+$('apply').onclick = () => {
+  const t = +$('tgt').value, m = +$('meas').value;
+  if (t > 0 && m > 0) {
+    cd = Math.min(1600, Math.max(60, cd * t / m));
+    $('meas').value = '';
+    $('cal').textContent = 'Circle is now ' + t + ' mm across.';
+    apply();
+  } else {
+    $('cal').textContent = 'Enter both numbers in mm.';
+  }
+};
+if (!document.documentElement.requestFullscreen) $('full').style.display = 'none';
+$('full').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen();
+};
+
+// Start over fades out, resets while hidden, then fades back in, so the
+// sperm never visibly jumps from the oocyte back into the needle.
+function startOver() {
+  const c = document.querySelector('#stage canvas');
+  if (!c) return;
+  c.style.opacity = 0;
+  $('lbl').style.opacity = 0;
+  setTimeout(() => {
+    resetProcedure();
+    const t = setInterval(() => {
+      if (stage === 3) {
+        clearInterval(t);
+        c.style.opacity = 1;
+        $('lbl').style.opacity = 1;
+      }
+    }, 50);
+  }, 240);
+}
+$('reset').onclick = () => startOver();
+
+// Dragging the picture moves the needle. Dragging left pushes it in.
+// The direction accounts for Rotate and Mirror.
+const stageEl = $('stage');
+let drag = null;
+stageEl.addEventListener('pointerdown', e => {
+  if (e.target.tagName !== 'CANVAS') return;
+  stageEl.setPointerCapture(e.pointerId);
+  drag = { x: e.clientX };
+  beginDrag();
+  e.preventDefault();
+});
+stageEl.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const k = (cd * 600 / 570) / 400;
+  const sgn = (mir ? -1 : 1) * (rot ? -1 : 1);
+  dragTo(((e.clientX - drag.x) / k) * sgn);
+});
+['pointerup', 'pointercancel'].forEach(t => stageEl.addEventListener(t, () => { drag = null; }));
+
+function hintText() {
+  if (stage < 3 && !partial) return 'Preparing slide...';
+  if (releasing) return 'Releasing the sperm...';
+  if (phase === 0) {
+    return targetPos < 7.95
+      ? 'Drag the picture left to push the needle into the oocyte.'
+      : 'The needle is inside the oocyte. Press Inject sperm.';
+  }
+  return targetPos < 11.95
+    ? 'Sperm released. Drag the picture right to withdraw the needle.'
+    : 'Injection complete. Press Start over to try again.';
+}
+
+setInterval(() => {
+  if (typeof pos === 'undefined') return;
+  $('hint').textContent = hintText();
+  $('lab').textContent = LABELS[Math.round(pos)];
+  $('inject').disabled = !(stage === 3 && phase === 0 && !releasing && targetPos >= 7.95);
+}, 150);
+
+// Labels: leader lines from each structure out to a name beside the circle.
+function ring(phys, kind) {
+  const k = Math.floor(((phys + Math.PI) / TAU) * N) % N;
+  const r = kind === 'zona' ? (Zi[k] + Zo[k]) / 2 : (Rp[k] + Zi[k]) / 2;
+  return [CXO + Math.cos(phys) * r, CYO + Math.sin(phys) * r];
+}
+
+const LBL = [
+  { t: 'Polar body', ang: -100, pt: () => [pbx, pby] },
+  { t: 'Perivitelline space', ang: -155, pt: () => ring(-2.4, 'pvs') },
+  { t: 'Holding pipette', ang: 172, pt: () => [XF - 45, CYO - 45] },
+  { t: 'Oocyte (ooplasm)', ang: 122, pt: () => [CXO - 18, CYO + 28] },
+  { t: 'Zona pellucida', ang: 72, pt: () => ring(1.05, 'zona') },
+  { t: 'Sperm', ang: 22, pt: () => [spermX, NY], vis: () => Math.hypot(spermX - 200, NY - 200) < 172 },
+  { t: 'ICSI needle', ang: -24, pt: () => [Math.min(tipX + 40, 368), NY - 2] }
+];
+
+function T(x, y) {
+  if (mir) x = -x;
+  if (rot) { x = -x; y = -y; }
+  return [x, y];
+}
+
+let lastOut = null;
+function drawLabels() {
+  const svg = $('lbl');
+  let out = '';
+  if (labelsOn && typeof Zi !== 'undefined' && Zi.length && stage !== 0 && (stage === 3 || partial)) {
+    const vw = innerWidth, vh = innerHeight, cx = vw / 2, cy = vh / 2;
+    const k = (cd * 600 / 570) / 400, R = cd / 2;
+    for (const L of LBL) {
+      if (L.vis && !L.vis()) continue;
+      const p = L.pt();
+      const a = T((p[0] - 200) * k, (p[1] - 200) * k);
+      const ax = cx + a[0], ay = cy + a[1];
+      const rad = L.ang * Math.PI / 180;
+      const d = T(Math.cos(rad), Math.sin(rad));
+      const end = d[0] < 0;
+      const w = L.t.length * 6.6;
+      let lx = cx + d[0] * (R + 16), ly = cy + d[1] * (R + 16);
+      lx = Math.max(end ? w + 8 : 8, Math.min(vw - (end ? 8 : w + 8), lx));
+      ly = Math.max(14, Math.min(vh - 14, ly));
+      const ex = lx + (end ? 4 : -4);
+      out += '<line x1="' + ax.toFixed(1) + '" y1="' + ay.toFixed(1) + '" x2="' + ex.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="rgba(235,235,235,0.75)" stroke-width="1"/>';
+      out += '<circle cx="' + ax.toFixed(1) + '" cy="' + ay.toFixed(1) + '" r="2.5" fill="#ececec" stroke="#000" stroke-width="1"/>';
+      out += '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" text-anchor="' + (end ? 'end' : 'start') + '" dominant-baseline="middle">' + L.t + '</text>';
+    }
+  }
+  if (out !== lastOut) {
+    svg.innerHTML = out;
+    lastOut = out;
+  }
+}
+setInterval(drawLabels, 100);
+window.addEventListener('resize', drawLabels);
+apply();
+</script>
+</body>
+</html>

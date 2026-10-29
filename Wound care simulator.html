@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wound care simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1EC; --surface:#FFFFFF; --ink:#1C2A2C; --muted:#5B6B6C; --line:#D3DAD4;
+  --accent:#1F6F78; --accent-soft:#E1EEEF;
+  --good:#2E7D4F; --good-soft:#E3F2E8; --warn:#9A6200; --warn-soft:#FBF0DC; --bad:#B3261E; --bad-soft:#FBE7E5;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141A1B; --surface:#1D2526; --ink:#E6ECEA; --muted:#9AA9A8; --line:#2F3A3B;
+    --accent:#6CC0C8; --accent-soft:#1E3436;
+    --good:#74C795; --good-soft:#1C3326; --warn:#E5AE52; --warn-soft:#3A2E17; --bad:#F2918A; --bad-soft:#3E1F1C;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141A1B; --surface:#1D2526; --ink:#E6ECEA; --muted:#9AA9A8; --line:#2F3A3B;
+  --accent:#6CC0C8; --accent-soft:#1E3436;
+  --good:#74C795; --good-soft:#1C3326; --warn:#E5AE52; --warn-soft:#3A2E17; --bad:#F2918A; --bad-soft:#3E1F1C;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 40px}
+h1,h2,h3{font-family:"Source Serif 4",Georgia,"Times New Roman",serif;font-weight:600;margin:0}
+header h1{font-size:clamp(30px,4.4vw,44px);line-height:1.08;letter-spacing:-.01em}
+header p{color:var(--muted);margin:8px 0 0;max-width:60ch}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:24px 0 22px}
+.case-btn{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 14px}
+.case-btn:hover{border-color:var(--accent)}
+.case-btn[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
+.case-btn strong{display:block}
+.case-btn span{display:block;color:var(--muted);font-size:14px}
+.case-btn .best{color:var(--accent);font-size:13px;margin-top:2px}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:28px;align-items:start}
+@media (max-width:880px){.grid{grid-template-columns:1fr}}
+
+.photo{margin:0;background:#23221F;border-radius:14px;overflow:hidden}
+.photo svg{display:block;width:100%;height:auto}
+.photo figcaption{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;color:#C9C6BC;font-size:14px}
+.ghost{background:transparent;border:1px solid #5A5850;color:#EDEAE0;border-radius:8px;padding:6px 12px;font-size:14px}
+.ghost:hover{border-color:#C9C6BC}
+
+.patient{margin-top:20px}
+.patient h2{font-size:24px}
+.intro{font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.65;margin:6px 0 14px;max-width:62ch}
+dl.chart{display:grid;grid-template-columns:max-content 1fr;margin:0;border-top:1px solid var(--line)}
+dl.chart dt,dl.chart dd{margin:0;padding:8px 0;border-bottom:1px solid var(--line)}
+dl.chart dt{color:var(--muted);padding-right:18px;font-size:14px;padding-top:9px}
+
+.work{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 22px 24px}
+ol.steps{list-style:none;display:flex;gap:6px;margin:0 0 22px;padding:0;counter-reset:s}
+ol.steps li{flex:1;counter-increment:s;font-size:13px;color:var(--muted);padding-top:9px;border-top:4px solid var(--line);min-width:0}
+ol.steps li::before{content:counter(s) ". "}
+ol.steps li[aria-current="step"]{color:var(--ink);border-top-color:var(--accent);font-weight:700}
+ol.steps li.g2{border-top-color:var(--good)}
+ol.steps li.g1{border-top-color:var(--warn)}
+ol.steps li.g0{border-top-color:var(--bad)}
+
+.context{font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.6;margin:0 0 10px;color:var(--ink)}
+.q{font-size:22px;line-height:1.3;margin:0 0 16px;max-width:40ch}
+.opts{display:grid;gap:10px}
+.opt{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;line-height:1.45}
+.opt:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}
+.opt:disabled{cursor:default}
+.opt.answered{opacity:.62}
+.opt.chosen,.opt.best{opacity:1}
+.opt.chosen.g0{border-color:var(--bad);background:var(--bad-soft)}
+.opt.chosen.g1{border-color:var(--warn);background:var(--warn-soft)}
+.opt.best{border-color:var(--good);background:var(--good-soft)}
+.tag{flex:none;font-size:13px;font-weight:700;white-space:nowrap;padding-top:1px}
+.tag.g2{color:var(--good)} .tag.g1{color:var(--warn)} .tag.g0{color:var(--bad)}
+
+.feedback{margin-top:18px;padding:14px 16px;border-radius:10px;background:var(--bg);border-left:4px solid var(--accent)}
+.feedback.g2{border-left-color:var(--good)} .feedback.g1{border-left-color:var(--warn)} .feedback.g0{border-left-color:var(--bad)}
+.feedback p{margin:0 0 8px} .feedback p:last-child{margin:0}
+.feedback b{font-weight:700}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.primary{background:var(--accent);color:var(--surface);border:0;border-radius:9px;padding:11px 18px;font-weight:700}
+.primary:hover{filter:brightness(1.08)}
+.secondary{background:transparent;border:1px solid var(--line);border-radius:9px;padding:10px 16px}
+.secondary:hover{border-color:var(--accent)}
+
+.score{display:flex;align-items:baseline;gap:12px;margin:8px 0 6px}
+.score .n{font-family:"Source Serif 4",Georgia,serif;font-size:56px;line-height:1;font-weight:600}
+.score .of{color:var(--muted)}
+.verdict{margin:0 0 18px;color:var(--muted)}
+.review{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.review li{padding:12px 0;border-bottom:1px solid var(--line)}
+.review .head{display:flex;justify-content:space-between;gap:10px;font-weight:700}
+.review p{margin:4px 0 0;font-size:15px}
+.review .bestline{color:var(--muted)}
+
+footer{margin-top:32px;color:var(--muted);font-size:14px;max-width:70ch}
+@media (prefers-reduced-motion: no-preference){
+  .feedback{animation:rise .25s ease-out}
+  @keyframes rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Wound care simulator</h1>
+    <p>Four bedside cases. Read the chart, study the wound, and make the call at each of four steps. You’ll get feedback after every choice and a debrief at the end.</p>
+  </header>
+
+  <nav class="cases" id="cases" aria-label="Choose a case"></nav>
+
+  <main class="grid">
+    <section aria-label="Patient and wound">
+      <figure class="photo">
+        <svg id="wound" viewBox="0 0 400 290" role="img" aria-labelledby="woundDesc"><desc id="woundDesc"></desc></svg>
+        <figcaption><span id="caption"></span><button class="ghost" id="labelsBtn" aria-pressed="false">Show tissue labels</button></figcaption>
+      </figure>
+      <div class="patient" id="patient"></div>
+    </section>
+
+    <section class="work" aria-label="Decisions">
+      <ol class="steps" id="steps"></ol>
+      <div id="panel"></div>
+    </section>
+  </main>
+
+  <footer>For practice only. Illustrations are simplified. At the bedside, follow your facility’s wound care protocols, product instructions and provider orders.</footer>
+</div>
+
+<script>
+var GRADE = {2:"Best choice",1:"Partly right",0:"Not this one"};
+
+var CASES = [
+{
+  id:"sacral",
+  patient:"Mr. Okafor, 78",
+  kind:"Sacral pressure injury",
+  intro:"Admitted five days ago after a hip fracture repair. He’s been mostly bedbound and incontinent of urine at night. Nursing found a wound over his sacrum this morning.",
+  chart:[
+    ["Location","Sacrum"],
+    ["Size","4.2 × 3.1 × 0.8 cm"],
+    ["Wound bed","About 70% red granulation, 30% yellow slough; subcutaneous fat visible"],
+    ["Exudate","Moderate, serous"],
+    ["Periwound","Intact, no erythema"],
+    ["Odor","None after cleansing"],
+    ["Other","Braden score 12; temp 37.0 °C"]
+  ],
+  desc:"Oval sacral wound with a red granular base and two yellow slough patches.",
+  labels:[{x:190,y:132,t:"Granulation"},{x:232,y:108,t:"Slough"},{x:168,y:160,t:"Slough",left:true}],
+  steps:[
+    {title:"Assess", context:"Full-thickness tissue loss with fat visible. No bone, tendon or muscle. The slough doesn’t hide the depth.",
+     prompt:"How do you stage this pressure injury?",
+     options:[
+      {t:"Stage 2",g:0,w:"Stage 2 is partial thickness: a shallow pink-red bed with no slough. This wound is full thickness."},
+      {t:"Unstageable",g:0,w:"Unstageable means slough or eschar hides the base so depth can’t be judged. Here you can see the depth."},
+      {t:"Stage 3",g:2,w:"Full-thickness loss with fat visible and no exposed bone, tendon or muscle. Slough may be present as long as it doesn’t obscure the depth."},
+      {t:"Stage 4",g:0,w:"Stage 4 needs exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone."}
+     ]},
+    {title:"Plan", context:"He’s bedbound with a Braden score of 12.",
+     prompt:"Which order will do the most for this wound?",
+     options:[
+      {t:"Keep the head of the bed at 45° or higher so he’s comfortable",g:0,w:"Raising the head of the bed above 30° increases shear and pressure on the sacrum. Keep it at 30° or lower when you can."},
+      {t:"Use a ring (donut) cushion under the sacrum",g:0,w:"Ring cushions concentrate pressure on the surrounding tissue and reduce blood flow. They aren’t recommended."},
+      {t:"Turn at least every 2 hours with a 30° side-lying tilt, on a pressure-redistributing mattress",g:2,w:"No dressing will heal a pressure injury that’s still under pressure. Off-loading and the right support surface come first."},
+      {t:"Massage the reddened skin around the wound to boost circulation",g:0,w:"Massaging reddened skin over bony prominences can damage fragile tissue further."}
+     ]},
+    {title:"Cleanse", context:"You’re about to change the dressing.",
+     prompt:"How do you cleanse the wound?",
+     options:[
+      {t:"Wipe gently with saline-moistened gauze",g:1,w:"Gentle and non-toxic, but wiping doesn’t reach the full depth or lift debris as well as irrigation."},
+      {t:"Irrigate with normal saline using a 35 mL syringe and 19-gauge angiocath",g:2,w:"This delivers about 8 psi, inside the 4–15 psi range that loosens debris without driving bacteria into the tissue."},
+      {t:"Hydrogen peroxide to bubble out the slough",g:0,w:"Peroxide is cytotoxic to fibroblasts and new granulation tissue. Avoid it for routine cleansing."},
+      {t:"Scrub the bed firmly with dry gauze",g:0,w:"Scrubbing damages granulation tissue and hurts. Irrigation removes loose debris more gently."}
+     ]},
+    {title:"Dress", context:"Moderate exudate, 0.8 cm deep, 30% slough.",
+     prompt:"Which dressing fits best?",
+     options:[
+      {t:"Transparent film alone",g:0,w:"Film can’t absorb moderate exudate or fill a 0.8 cm cavity. Fluid would pool and macerate the edges."},
+      {t:"Hydrocolloid wafer",g:1,w:"Supports autolysis on shallow wounds with low-to-moderate exudate, but it doesn’t fill dead space, so this depth would still need a filler underneath."},
+      {t:"Wet-to-dry gauze three times a day",g:0,w:"Non-selective: it strips healthy tissue along with slough, hurts, and cools the wound bed. Moisture-retentive dressings are preferred."},
+      {t:"Calcium alginate or gelling fiber in the cavity, covered with a bordered foam",g:2,w:"Fills the dead space, absorbs moderate exudate, and keeps the bed moist so the body can break down slough on its own (autolysis)."}
+     ]}
+  ]
+},
+{
+  id:"venous",
+  patient:"Ms. Reyes, 64",
+  kind:"Lower leg ulcer",
+  intro:"Seen in clinic for a leg wound that has been open for three months. She works long shifts standing at a till and says her ankles swell by evening.",
+  chart:[
+    ["Location","Left leg, just above the medial malleolus"],
+    ["Size","5.5 × 4.0 × 0.2 cm, irregular edges"],
+    ["Wound bed","Shallow, ruddy red granulation"],
+    ["Exudate","Heavy, serous; dressing soaked through"],
+    ["Periwound","White, soggy edges; brown skin staining; pitting edema"],
+    ["Pulses","Pedal pulses palpable"],
+    ["Other","ABI not yet done"]
+  ],
+  desc:"Large shallow irregular ulcer above the ankle with white macerated edges and brown staining of surrounding skin.",
+  labels:[{x:200,y:132,t:"Granulation"},{x:306,y:150,t:"Maceration",left:true},{x:96,y:52,t:"Hemosiderin staining"}],
+  steps:[
+    {title:"Assess", context:"Shallow, irregular, heavy exudate, brown staining, edema, palpable pulses.",
+     prompt:"Which cause fits these findings best?",
+     options:[
+      {t:"Arterial ulcer",g:0,w:"Arterial ulcers usually sit on toes or pressure points, look round and punched out, with a pale dry base, little exudate and weak or absent pulses."},
+      {t:"Venous leg ulcer",g:2,w:"The gaiter-area location, shallow irregular shape, heavy exudate, edema and hemosiderin staining are classic venous signs."},
+      {t:"Neuropathic (diabetic) ulcer",g:0,w:"Neuropathic ulcers usually form on the sole under pressure points, often with a callus rim."},
+      {t:"Pressure injury",g:0,w:"The medial ankle above the malleolus isn’t a typical pressure point for her, and the surrounding signs point to venous disease."}
+     ]},
+    {title:"Plan", context:"Compression is the core treatment for venous ulcers.",
+     prompt:"What has to happen before you apply compression?",
+     options:[
+      {t:"Nothing. Compression is safe for any leg ulcer",g:0,w:"Compression on a leg with poor arterial flow can cause ischemia and tissue death."},
+      {t:"Elevate the leg and wait for the swelling to go down",g:1,w:"Elevation helps and is worth teaching, but it doesn’t replace checking arterial supply first."},
+      {t:"Send a routine wound culture",g:0,w:"There are no signs of infection. Every chronic wound grows bacteria, so a routine culture won’t change management."},
+      {t:"Get an ankle-brachial index (ABI)",g:2,w:"An ABI screens for arterial disease. Roughly: 0.8–1.3 allows full compression, 0.5–0.8 calls for reduced compression with specialist input, and below 0.5 compression is contraindicated."}
+     ]},
+    {title:"Cleanse", context:"The skin around the wound is white and soggy.",
+     prompt:"How do you cleanse and prep the area?",
+     options:[
+      {t:"Irrigate with saline, pat the periwound dry, and apply a no-sting barrier film",g:2,w:"Protecting the macerated edge stops it breaking down and enlarging the wound."},
+      {t:"Irrigate with saline only",g:1,w:"Fine for the wound bed, but the macerated periwound needs protecting too."},
+      {t:"Wipe the periwound with alcohol to dry it out",g:0,w:"Alcohol stings, strips the skin and makes the damage worse."},
+      {t:"Soak the leg in a basin for 20 minutes",g:0,w:"Soaking adds moisture to skin that’s already macerated and can spread contamination."}
+     ]},
+    {title:"Dress", context:"Her ABI comes back at 0.95.",
+     prompt:"Which plan do you choose?",
+     options:[
+      {t:"Hydrogel sheet",g:0,w:"Hydrogel adds moisture. This wound already has far too much."},
+      {t:"Absorbent foam with no compression",g:1,w:"Handles the fluid but leaves the venous hypertension untreated, so healing stalls."},
+      {t:"Superabsorbent pad or absorbent foam under a multilayer compression bandage",g:2,w:"Manages heavy exudate while compression treats the cause: venous hypertension."},
+      {t:"Hydrocolloid under compression",g:1,w:"Can be used under compression, but heavy exudate is likely to overwhelm it and leak, worsening maceration."}
+     ]}
+  ]
+},
+{
+  id:"diabetic",
+  patient:"Mr. Haddad, 59",
+  kind:"Plantar foot ulcer",
+  intro:"Type 2 diabetes for 15 years with peripheral neuropathy. He came in because his sock was wet and smelled. He says the wound doesn’t hurt.",
+  chart:[
+    ["Location","Right foot, plantar, under the first metatarsal head"],
+    ["Size","2.1 × 1.8 × 0.6 cm, thick callus rim"],
+    ["Wound bed","Pale pink-red with some slough"],
+    ["Exudate","Moderate, purulent"],
+    ["Periwound","Erythema spreading 3 cm, warm, swollen"],
+    ["Odor","Foul"],
+    ["Other","Temp 38.1 °C; glucose 286 mg/dL"]
+  ],
+  desc:"Small round ulcer with a thick pale callus rim, purulent drainage and wide red inflamed skin around it.",
+  labels:[{x:212,y:118,t:"Slough"},{x:188,y:142,t:"Pus",left:true},{x:254,y:170,t:"Callus"},{x:84,y:64,t:"Erythema"}],
+  steps:[
+    {title:"Assess", context:"Look at the chart and the wound together.",
+     prompt:"Which finding needs action first?",
+     options:[
+      {t:"The callus around the wound edge",g:1,w:"Callus raises local pressure and will need debriding, but it isn’t the most urgent finding today."},
+      {t:"Spreading erythema over 2 cm, purulent drainage, odor and fever",g:2,w:"These point to a moderate-to-severe diabetic foot infection, which can threaten the limb."},
+      {t:"He says it doesn’t hurt",g:0,w:"Expected with peripheral neuropathy. No pain never rules out a serious infection."},
+      {t:"Blood glucose of 286 mg/dL",g:1,w:"Hyperglycemia matters and often signals infection, but it doesn’t outrank the infection itself."}
+     ]},
+    {title:"Plan", context:"You’ve identified a spreading infection.",
+     prompt:"What do you do next?",
+     options:[
+      {t:"Apply a silver dressing and reassess at next week’s visit",g:0,w:"Antimicrobial dressings don’t treat a spreading infection. A week’s delay risks spread to bone."},
+      {t:"Have him soak the foot in warm water twice a day",g:0,w:"With neuropathy he can’t feel if the water is scalding, and soaking macerates skin."},
+      {t:"Continue routine care and recheck his temperature tomorrow",g:0,w:"Waiting on a spreading infection in a diabetic foot is unsafe."},
+      {t:"Notify the provider now; anticipate culture, labs, X-ray, a probe-to-bone test and antibiotics",g:2,w:"Diabetic foot infections need prompt systemic treatment and assessment for osteomyelitis."}
+     ]},
+    {title:"Cleanse", context:"The provider orders a wound culture.",
+     prompt:"How do you collect it?",
+     options:[
+      {t:"Swab the pus before cleaning the wound",g:0,w:"Surface pus and debris are full of colonizing bacteria and give misleading results."},
+      {t:"Swab the old dressing",g:0,w:"The used dressing holds surface contaminants, not the organisms in the tissue."},
+      {t:"Irrigate with saline, then swab 1 cm² of clean viable tissue, pressing to express fluid (Levine technique)",g:2,w:"Cleansing first removes surface contaminants so the sample better reflects what’s in the tissue. A tissue specimen taken during debridement is better still if the provider obtains one."},
+      {t:"Swab the dry callus at the edge",g:0,w:"Callus isn’t viable tissue and won’t reflect the infection."}
+     ]},
+    {title:"Dress", context:"Antibiotics have started.",
+     prompt:"Which dressing and protection plan do you choose?",
+     options:[
+      {t:"Hydrocolloid wafer changed every 5–7 days",g:0,w:"An occlusive dressing left for days hides an infected wound and can encourage anaerobic growth."},
+      {t:"Antimicrobial dressing checked daily, regular shoes",g:1,w:"Right dressing, but without offloading the ulcer stays under pressure every step."},
+      {t:"Antimicrobial dressing checked daily, plus an offloading boot or total-contact cast as ordered",g:2,w:"Daily checks track the infection, and offloading removes the pressure that caused the ulcer. Without it, plantar ulcers rarely heal."},
+      {t:"Dry gauze, and he can keep walking normally in his usual shoes",g:0,w:"Dry gauze sticks to the bed, and continued weight-bearing prevents healing."}
+     ]}
+  ]
+},
+{
+  id:"heel",
+  patient:"Mrs. Lindqvist, 85",
+  kind:"Heel wound",
+  intro:"Long-term care resident with peripheral arterial disease. She spends most of the day in bed. The night nurse noted a dark area on her left heel.",
+  chart:[
+    ["Location","Left posterior heel"],
+    ["Size","3.0 × 2.5 cm"],
+    ["Wound bed","Dry, black, firmly adherent eschar; base not visible"],
+    ["Exudate","None"],
+    ["Periwound","No redness, swelling or fluctuance"],
+    ["Perfusion","Foot cool and pale; dorsalis pedis not palpable; capillary refill over 3 s"],
+    ["Other","Afebrile; no pain at rest"]
+  ],
+  desc:"Dry black eschar on a pale heel with a thin brown dry edge and no redness.",
+  labels:[{x:200,y:130,t:"Stable eschar"},{x:262,y:150,t:"Dry, intact edge"}],
+  steps:[
+    {title:"Assess", context:"The eschar is dry, intact and adherent, and you can’t see the base.",
+     prompt:"How do you classify this wound?",
+     options:[
+      {t:"Stage 4 pressure injury",g:0,w:"You can’t see the base under the eschar, so you can’t confirm depth."},
+      {t:"Unstageable pressure injury with stable eschar",g:2,w:"Dry, adherent, intact eschar without redness or fluctuance is stable. The base is hidden, so it’s unstageable."},
+      {t:"Deep tissue pressure injury",g:0,w:"Deep tissue injury is intact skin with persistent deep red, maroon or purple discoloration. This is eschar."},
+      {t:"Stage 2 pressure injury",g:0,w:"Stage 2 is a shallow, partial-thickness wound with a visible pink-red bed."}
+     ]},
+    {title:"Plan", context:"Her foot is cool and pale, with no palpable pulse.",
+     prompt:"What should happen to the eschar?",
+     options:[
+      {t:"Sharp debridement at the bedside to see the base",g:0,w:"On an ischemic limb the wound can’t heal after debridement, and you risk a larger, infected wound."},
+      {t:"Apply hydrogel to soften it for debridement",g:0,w:"Moisture turns stable eschar unstable and opens the door to infection."},
+      {t:"Enzymatic debriding ointment",g:0,w:"Still debridement. Not until perfusion has been assessed."},
+      {t:"Leave it intact, keep it dry, and request a vascular assessment",g:2,w:"Stable heel eschar on a poorly perfused limb works as the body’s own dressing. Perfusion has to be assessed before anyone considers debridement."}
+     ]},
+    {title:"Cleanse", context:"It’s time for daily wound care.",
+     prompt:"What topical care do you give?",
+     options:[
+      {t:"Leave it dry with nothing applied, and inspect daily",g:1,w:"Keeping it dry is right. Many protocols also add an antiseptic paint to limit surface bacteria."},
+      {t:"Paint with povidone-iodine and let it air-dry, if your protocol allows",g:2,w:"Keeps the eschar dry and reduces surface bacteria."},
+      {t:"Cover with saline-moistened gauze",g:0,w:"Moisture softens stable eschar."},
+      {t:"Scrub the eschar edges to loosen them",g:0,w:"Disrupting the edges breaks the seal and invites infection."}
+     ]},
+    {title:"Protect", context:"She’s in bed most of the day.",
+     prompt:"How do you protect the heel?",
+     options:[
+      {t:"Place a pillow directly under the heel",g:0,w:"A pillow under the heel still loads it. The calf should take the weight so the heel hangs free."},
+      {t:"Cover the eschar with a hydrocolloid",g:0,w:"Traps moisture under the eschar and softens it."},
+      {t:"Apply a compression wrap to support the leg",g:0,w:"Compression on a limb with arterial disease can cause ischemia."},
+      {t:"Float the heels with a pillow under the calves or an offloading boot, and inspect daily for drainage, softening, redness or odor",g:2,w:"All pressure has to come off the heel. Any of those changes means the eschar is no longer stable and needs re-evaluation."}
+     ]}
+  ]
+}
+];
+
+/* ---------- wound drawing ---------- */
+function rng(seed){var s=seed;return function(){s=(s*16807)%2147483647;return (s-1)/2147483646;};}
+function blob(cx,cy,rx,ry,seed,j,n){
+  j=j==null?.18:j; n=n||11; var r=rng(seed), p=[];
+  for(var i=0;i<n;i++){var a=i/n*Math.PI*2,k=1+(r()-.5)*2*j;p.push([cx+Math.cos(a)*rx*k,cy+Math.sin(a)*ry*k]);}
+  function m(a,b){return[(a[0]+b[0])/2,(a[1]+b[1])/2];}
+  var s=m(p[n-1],p[0]),d="M"+s[0].toFixed(1)+" "+s[1].toFixed(1);
+  for(var i2=0;i2<n;i2++){var q=p[i2],e=m(p[i2],p[(i2+1)%n]);d+=" Q"+q[0].toFixed(1)+" "+q[1].toFixed(1)+" "+e[0].toFixed(1)+" "+e[1].toFixed(1);}
+  return d+"Z";
+}
+var DEFS='<defs>'+
+ '<filter id="b12" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>'+
+ '<filter id="b4" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4"/></filter>'+
+ '<filter id="b1" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.4"/></filter>'+
+ '<pattern id="gran" width="9" height="9" patternUnits="userSpaceOnUse"><rect width="9" height="9" fill="#a3262f"/><circle cx="4.5" cy="4.5" r="3.4" fill="#c33a43"/><circle cx="3.6" cy="3.5" r="1.1" fill="#e57074" opacity=".75"/><circle cx="0" cy="0" r="2" fill="#bd3640"/><circle cx="9" cy="9" r="2" fill="#bd3640"/><circle cx="9" cy="0" r="2" fill="#bd3640"/><circle cx="0" cy="9" r="2" fill="#bd3640"/></pattern>'+
+ '<radialGradient id="depth"><stop offset="50%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity=".5"/></radialGradient>'+
+ '<radialGradient id="skinlight" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></radialGradient>'+
+'</defs>';
+
+function skin(c){return '<rect width="400" height="290" fill="'+c+'"/><rect width="400" height="290" fill="url(#skinlight)"/>';}
+function clip(d){return '<defs><clipPath id="wc"><path d="'+d+'"/></clipPath></defs>';}
+function sheen(list,op){return list.map(function(e){return '<ellipse cx="'+e[0]+'" cy="'+e[1]+'" rx="'+e[2]+'" ry="'+e[3]+'" fill="#fff" opacity="'+op+'"/>';}).join("");}
+
+var DRAW = {
+  sacral:function(){
+    var w=blob(200,130,84,62,7,.16), s1=blob(232,110,30,20,11,.3), s2=blob(170,160,20,12,23,.3);
+    return skin("#8a573d")+
+      '<path d="'+blob(200,130,98,76,7,.16)+'" fill="#4f2c1e" opacity=".55" filter="url(#b4)"/>'+
+      clip(w)+'<path d="'+w+'" fill="url(#gran)"/>'+
+      '<g clip-path="url(#wc)"><path d="'+s1+'" fill="#d8bd55"/><path d="'+s2+'" fill="#d1b44c"/>'+
+      '<path d="'+s1+'" fill="none" stroke="#a88f35" stroke-width="1.5" opacity=".6"/>'+
+      '<ellipse cx="200" cy="130" rx="92" ry="70" fill="url(#depth)"/></g>'+
+      sheen([[188,118,14,4],[214,146,10,3],[176,138,6,2]],.28)+
+      '<path d="'+w+'" fill="none" stroke="#3a1712" stroke-width="2.5" opacity=".75"/>';
+  },
+  venous:function(){
+    var w=blob(200,130,110,80,13,.24);
+    var spots=""; var r=rng(41);
+    for(var i=0;i<26;i++){var a=r()*Math.PI*2,d=125+r()*55;spots+='<circle cx="'+(200+Math.cos(a)*d*1.3).toFixed(1)+'" cy="'+(135+Math.sin(a)*d*.75).toFixed(1)+'" r="'+(3+r()*6).toFixed(1)+'" fill="#6b3b20" opacity=".35"/>';}
+    return skin("#dfb08c")+
+      '<path d="'+blob(200,135,178,118,5,.2)+'" fill="#7a4626" opacity=".5" filter="url(#b12)"/>'+spots+
+      '<path d="'+blob(200,130,124,93,13,.24)+'" fill="#f1ebe2" opacity=".9" filter="url(#b1)"/>'+
+      clip(w)+'<path d="'+w+'" fill="url(#gran)"/>'+
+      '<g clip-path="url(#wc)"><rect width="400" height="290" fill="#ec8f8f" opacity=".22"/><ellipse cx="200" cy="130" rx="118" ry="88" fill="url(#depth)" opacity=".45"/></g>'+
+      sheen([[170,110,22,5],[230,150,18,4],[205,120,9,3],[150,150,12,3],[250,112,10,3]],.38)+
+      '<path d="'+w+'" fill="none" stroke="#8a3a36" stroke-width="1.5" opacity=".55"/>';
+  },
+  diabetic:function(){
+    var w=blob(200,130,42,36,19,.2), cal=blob(200,130,68,60,17,.15);
+    return skin("#c2885f")+
+      '<path d="'+blob(200,130,155,120,3,.25)+'" fill="#c8352d" opacity=".5" filter="url(#b12)"/>'+
+      '<path d="'+cal+'" fill="#e4d6b2" filter="url(#b1)"/>'+
+      '<path d="'+blob(200,130,58,51,17,.15)+'" fill="none" stroke="#cbbb92" stroke-width="3" opacity=".7"/>'+
+      clip(w)+'<path d="'+w+'" fill="url(#gran)"/>'+
+      '<g clip-path="url(#wc)"><rect width="400" height="290" fill="#eab0b0" opacity=".38"/>'+
+      '<path d="'+blob(212,118,16,11,29,.3)+'" fill="#d6be58"/>'+
+      '<path d="'+blob(188,142,15,9,31,.35)+'" fill="#c8c46a" opacity=".95"/>'+
+      '<ellipse cx="185" cy="139" rx="5" ry="2" fill="#fff" opacity=".45"/>'+
+      '<ellipse cx="200" cy="130" rx="46" ry="40" fill="url(#depth)"/></g>'+
+      '<path d="'+w+'" fill="none" stroke="#5a2a20" stroke-width="2" opacity=".75"/>';
+  },
+  heel:function(){
+    var w=blob(200,130,60,50,37,.14);
+    return skin("#ead0c0")+'<rect width="400" height="290" fill="#9db2c8" opacity=".14"/>'+
+      '<path d="'+blob(200,130,67,57,37,.14)+'" fill="#7a5040" opacity=".75" filter="url(#b1)"/>'+
+      '<path d="'+w+'" fill="#1e1411"/>'+
+      '<path d="M156 122 L178 128 L196 117 L220 132 L242 125 M172 150 L195 141 L214 155 L232 148 M204 96 L209 117 M186 165 L198 152" fill="none" stroke="#4a352b" stroke-width="1.5" stroke-linejoin="round"/>'+
+      '<ellipse cx="188" cy="112" rx="26" ry="9" fill="#fff" opacity=".07"/>';
+  }
+};
+
+function ruler(){
+  var s='<g><rect x="40" y="246" width="320" height="30" rx="2" fill="#f6f2e2" stroke="#9a947f" stroke-width="1"/>';
+  for(var i=0;i<=16;i++){var x=40+i*20,major=i%2===0;
+    s+='<line x1="'+x+'" y1="246" x2="'+x+'" y2="'+(major?258:253)+'" stroke="#3d3a30" stroke-width="1"/>';
+    if(major&&i<16)s+='<text x="'+(x+3)+'" y="270" font-size="10" fill="#3d3a30" font-family="Atkinson Hyperlegible, system-ui, sans-serif">'+(i/2)+'</text>';}
+  return s+'<text x="342" y="270" font-size="10" fill="#3d3a30" font-family="Atkinson Hyperlegible, system-ui, sans-serif">cm</text></g>';
+}
+function labelLayer(c){
+  return c.labels.map(function(l){
+    var tx=l.left?l.x-10:l.x+10, anchor=l.left?"end":"start";
+    return '<g><circle cx="'+l.x+'" cy="'+l.y+'" r="4.5" fill="#fff" stroke="#111" stroke-width="1.5"/>'+
+      '<text x="'+tx+'" y="'+(l.y+4)+'" text-anchor="'+anchor+'" font-size="13" font-weight="700" font-family="Atkinson Hyperlegible, system-ui, sans-serif" fill="#111" stroke="#fff" stroke-width="3.5" paint-order="stroke" stroke-linejoin="round">'+l.t+'</text></g>';
+  }).join("");
+}
+
+/* ---------- state ---------- */
+var state={c:0,s:0,answers:[]}, showLabels=false;
+function loadBest(){try{return JSON.parse(localStorage.getItem("wcs-best")||"{}")||{};}catch(e){return {};}}
+function saveBest(){try{localStorage.setItem("wcs-best",JSON.stringify(best));}catch(e){}}
+var best=loadBest();
+
+function el(id){return document.getElementById(id);}
+
+function renderCases(){
+  el("cases").innerHTML=CASES.map(function(c,i){
+    var b=best[c.id]!=null?'<span class="best">Best score '+best[c.id]+'/'+c.steps.length*2+'</span>':'';
+    return '<button class="case-btn" data-c="'+i+'" aria-pressed="'+(i===state.c)+'"><strong>'+c.patient+'</strong><span>'+c.kind+'</span>'+b+'</button>';
+  }).join("");
+}
+function renderWound(){
+  var c=CASES[state.c];
+  el("wound").innerHTML='<desc id="woundDesc">'+c.desc+'</desc>'+DEFS+DRAW[c.id]()+ruler()+(showLabels?labelLayer(c):"");
+  el("caption").textContent=c.kind+", "+c.chart[1][1].split(",")[0];
+  var b=el("labelsBtn"); b.setAttribute("aria-pressed",String(showLabels)); b.textContent=showLabels?"Hide tissue labels":"Show tissue labels";
+}
+function renderPatient(){
+  var c=CASES[state.c];
+  el("patient").innerHTML='<h2>'+c.patient+'</h2><p class="intro">'+c.intro+'</p><dl class="chart">'+
+    c.chart.map(function(r){return '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>';}).join("")+'</dl>';
+}
+function renderSteps(){
+  var c=CASES[state.c];
+  el("steps").innerHTML=c.steps.map(function(st,i){
+    var a=state.answers[i], cls=a!=null?' class="g'+c.steps[i].options[a].g+'"':'';
+    var cur=i===state.s?' aria-current="step"':'';
+    return '<li'+cls+cur+'>'+st.title+'</li>';
+  }).join("");
+}
+function renderPanel(focusFeedback){
+  var c=CASES[state.c];
+  if(state.s>=c.steps.length){renderDebrief();return;}
+  var st=c.steps[state.s], a=state.answers[state.s], answered=a!=null;
+  var bestIdx=st.options.findIndex(function(o){return o.g===2;});
+  var h='';
+  if(st.context)h+='<p class="context">'+st.context+'</p>';
+  h+='<h3 class="q" id="q">'+st.prompt+'</h3><div class="opts" role="group" aria-labelledby="q">';
+  st.options.forEach(function(o,i){
+    var cls="opt", tag="";
+    if(answered){
+      cls+=" answered";
+      if(i===a){cls+=" chosen g"+o.g;tag='<span class="tag g'+o.g+'">'+(o.g===2?"Your pick: best choice":"Your pick: "+GRADE[o.g].toLowerCase())+'</span>';}
+      if(i===bestIdx){cls+=" best";if(i!==a)tag='<span class="tag g2">Best choice</span>';}
+    }
+    h+='<button class="'+cls+'" data-o="'+i+'"'+(answered?" disabled":"")+'><span>'+o.t+'</span>'+tag+'</button>';
+  });
+  h+='</div>';
+  if(answered){
+    var ch=st.options[a];
+    h+='<div class="feedback g'+ch.g+'" id="fb" tabindex="-1" role="status"><p><b>'+GRADE[ch.g]+'.</b> '+ch.w+'</p>';
+    if(ch.g!==2)h+='<p><b>Best choice:</b> '+st.options[bestIdx].t+'. '+st.options[bestIdx].w+'</p>';
+    h+='</div><div class="actions"><button class="primary" id="next">'+(state.s===c.steps.length-1?"See debrief":"Next step")+'</button></div>';
+  }
+  el("panel").innerHTML=h;
+  if(focusFeedback&&el("fb"))el("fb").focus({preventScroll:false});
+}
+function renderDebrief(){
+  var c=CASES[state.c], max=c.steps.length*2, score=0;
+  c.steps.forEach(function(st,i){score+=st.options[state.answers[i]].g;});
+  if(best[c.id]==null||score>best[c.id]){best[c.id]=score;saveBest();renderCases();}
+  var verdict=score===max?"Every call was the best one. Safe, evidence-based care.":
+    score>=max-2?"Strong work. Review the step that wasn’t quite right.":
+    score>=max/2?"Some good instincts. Go back over the steps marked below.":
+    "Worth another run. Read the reasoning for each step, then try again.";
+  var h='<h3 class="q">Case complete</h3><div class="score"><span class="n">'+score+'</span><span class="of">out of '+max+'</span></div><p class="verdict">'+verdict+'</p><ul class="review">';
+  c.steps.forEach(function(st,i){
+    var o=st.options[state.answers[i]], b=st.options.find(function(x){return x.g===2;});
+    h+='<li><div class="head"><span>'+(i+1)+'. '+st.title+'</span><span class="tag g'+o.g+'">'+GRADE[o.g]+'</span></div><p>You chose: '+o.t+'</p>'+
+      (o.g!==2?'<p class="bestline">Best: '+b.t+'</p>':'')+'</li>';
+  });
+  h+='</ul><div class="actions"><button class="primary" id="nextCase">Next case</button><button class="secondary" id="retry">Try this case again</button></div>';
+  el("panel").innerHTML=h;
+}
+function setCase(i){state={c:i,s:0,answers:[]};showLabels=false;renderAll();}
+function renderAll(){renderCases();renderWound();renderPatient();renderSteps();renderPanel();}
+
+el("cases").addEventListener("click",function(e){var b=e.target.closest(".case-btn");if(b)setCase(+b.dataset.c);});
+el("labelsBtn").addEventListener("click",function(){showLabels=!showLabels;renderWound();});
+el("panel").addEventListener("click",function(e){
+  var o=e.target.closest(".opt");
+  if(o&&!o.disabled){state.answers[state.s]=+o.dataset.o;renderSteps();renderPanel(true);return;}
+  if(e.target.closest("#next")){state.s++;renderSteps();renderPanel();var q=el("panel").querySelector(".q");if(q){q.setAttribute("tabindex","-1");q.focus();}return;}
+  if(e.target.closest("#retry")){setCase(state.c);return;}
+  if(e.target.closest("#nextCase")){setCase((state.c+1)%CASES.length);window.scrollTo({top:0});}
+});
+renderAll();
+</script>
+</body>
+</html>

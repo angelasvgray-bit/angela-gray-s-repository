@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Day 7: Nas’s New York, Then and Now (Google Maps)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F6; --surface:#FFFFFF; --ink:#14203A; --muted:#55617C; --line:#CBD3E2; --accent:#2B5BFF; --accent-ink:#FFFFFF;
+  /* 1994 map */
+  --t-water:#3B2F25; --t-land:#C9A97A; --t-edge:#7A5C3A; --t-pin:#B8331E; --t-text:#2A1E14; --t-card:#F4E7CF; --t-card-ink:#2A1E14; --t-card-muted:#6E5640;
+  /* today map */
+  --n-water:#0D1830; --n-land:#1E2C49; --n-edge:#3C5280; --n-pin:#FFC93C; --n-text:#E4E9F5; --n-card:#16223D; --n-card-ink:#E4E9F5; --n-card-muted:#93A0BE;
+  color-scheme:light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1222; --surface:#151E35; --ink:#E7ECF6; --muted:#9AA6C2; --line:#2A3654; --accent:#7D9BFF; --accent-ink:#0C1222;
+    --t-card:#2B2219; --t-card-ink:#F1E4CC; --t-card-muted:#C2A882; --n-card:#121B31;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1222; --surface:#151E35; --ink:#E7ECF6; --muted:#9AA6C2; --line:#2A3654; --accent:#7D9BFF; --accent-ink:#0C1222;
+  --t-card:#2B2219; --t-card-ink:#F1E4CC; --t-card-muted:#C2A882; --n-card:#121B31; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16.5px;line-height:1.55}
+h1,h2,h3{font-family:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;margin:0;line-height:1.1}
+button{font:inherit;color:inherit}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1160px;margin:0 auto;padding:22px 18px 70px}
+.top a{font-weight:700;text-decoration:none}
+.head{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap;margin:18px 0 22px}
+.day-num{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:clamp(4rem,12vw,7rem);line-height:.8;letter-spacing:-.05em;color:var(--accent)}
+.head h1{font-size:clamp(2rem,5vw,3.1rem);font-weight:800;letter-spacing:-.02em}
+.head p{margin:6px 0 0;color:var(--muted);max-width:62ch}
+
+/* era switch */
+.era-bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.era{display:inline-grid;grid-template-columns:1fr 1fr;border:2px solid var(--ink);border-radius:999px;overflow:hidden}
+.era button{border:0;background:transparent;padding:10px 22px;font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:1.15rem;cursor:pointer}
+.era button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.city{color:var(--muted);font-size:.95rem;max-width:60ch;margin:0}
+.city b{color:var(--ink)}
+
+.layout{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:880px){.layout{grid-template-columns:1fr}}
+
+.mapbox{position:relative;border-radius:18px;overflow:hidden;background:var(--water);aspect-ratio:1/1;max-height:76vh;width:100%;transition:background .5s}
+.mapbox[data-era="then"]{--water:var(--t-water);--land:var(--t-land);--edge:var(--t-edge);--pin:var(--t-pin);--mtext:var(--t-text)}
+.mapbox[data-era="now"]{--water:var(--n-water);--land:var(--n-land);--edge:var(--n-edge);--pin:var(--n-pin);--mtext:var(--n-text)}
+.mapbox iframe{display:block;width:100%;height:100%;border:0}
+.view-toggle{display:inline-flex;gap:6px;margin-top:10px}
+.view-toggle button{border:2px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;font-weight:700;font-size:.9rem;cursor:pointer}
+.view-toggle button[aria-pressed="true"]{border-color:var(--ink)}
+.boro{fill:var(--land);stroke:var(--edge);stroke-width:.5;transition:fill .5s}
+.blabel{fill:var(--edge);font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:7px;letter-spacing:.02em;pointer-events:none}
+.mapbox[data-era="now"] .blabel{fill:#5C719C}
+.pin{cursor:pointer}
+.pin circle{fill:var(--pin);stroke:var(--water);stroke-width:.8;transition:r .2s}
+.pin .halo{fill:none;stroke:var(--pin);stroke-width:.6;opacity:0}
+.pin.on .halo{opacity:1}
+.pin text{fill:var(--mtext);font-size:4.2px;font-weight:700;paint-order:stroke;stroke:var(--water);stroke-width:1.1px;stroke-linejoin:round;pointer-events:none;font-family:"Atkinson Hyperlegible",system-ui,sans-serif}
+.year{position:absolute;left:14px;top:6px;text-shadow:0 2px 12px rgba(0,0,0,.5);font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:clamp(3rem,10vw,5.5rem);line-height:1;letter-spacing:-.05em;color:var(--pin);opacity:.9;pointer-events:none}
+.places{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.places button{border:2px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:700;font-size:.92rem;cursor:pointer}
+.places button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+
+.card{border-radius:18px;padding:22px;transition:background .5s,color .5s}
+.card[data-era="then"]{background:var(--t-card);color:var(--t-card-ink);--cm:var(--t-card-muted);--cpin:var(--t-pin)}
+.card[data-era="now"]{background:var(--n-card);color:var(--n-card-ink);--cm:var(--n-card-muted);--cpin:var(--n-pin)}
+.card h2{font-size:1.9rem;letter-spacing:-.015em}
+.card .where{color:var(--cm);margin:4px 0 14px}
+.card .songs{font-size:.92rem;color:var(--cm);margin:0 0 14px}
+.card .era-label{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:1.1rem;color:var(--cpin);margin:0 0 4px}
+.card .body{margin:0 0 16px;font-size:1.02rem;max-width:58ch}
+.card .shift{border-top:1px solid var(--cm);padding-top:12px;margin:0 0 16px;font-weight:700}
+.links{display:flex;flex-wrap:wrap;gap:8px}
+.links a{border:1.5px solid currentColor;border-radius:999px;padding:8px 15px;text-decoration:none;font-weight:700;font-size:.92rem}
+.tip{font-size:.85rem;color:var(--cm);margin:12px 0 0}
+.foot{color:var(--muted);font-size:.86rem;margin-top:26px;max-width:80ch}
+@media (prefers-reduced-motion: reduce){.mapbox,.boro,.card{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="https://claude.ai/artifact/MPHtwj7irmt7ZopuUK5ApU" target="_blank" rel="noopener">‹ All 30 days</a></div>
+  <div class="head">
+    <div class="day-num">7</div>
+    <div>
+      <h1>Nas’s New York, then and now</h1>
+      <p>The places from Day 4, seen in 1994, the year Illmatic came out, and today. Pick a place to fly the Google map there, then flip the year to see what changed.</p>
+    </div>
+  </div>
+
+  <div class="era-bar">
+    <div class="era" role="group" aria-label="Era">
+      <button data-era="then" aria-pressed="true">1994</button>
+      <button data-era="now" aria-pressed="false">Today</button>
+    </div>
+    <p class="city" id="city"></p>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="mapbox" id="mapbox" data-era="then">
+        <iframe id="gmap" title="Google Map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+        <div class="year" id="year" aria-hidden="true">1994</div>
+      </div>
+      <div class="view-toggle" role="group" aria-label="Map view">
+        <button data-view="m" aria-pressed="false">Map</button>
+        <button data-view="k" aria-pressed="true">Satellite</button>
+      </div>
+      <div class="places" id="places"></div>
+    </div>
+    <article class="card" id="card" data-era="then" aria-live="polite"></article>
+  </div>
+
+  <p class="foot">History here is from my own knowledge through mid-2026, not live sources, so double-check figures before you cite them. Street View imagery only goes back to about 2007, so for the ’90s you’ll need photo archives like the NYC Municipal Archives or the Queens Public Library.</p>
+</div>
+
+<script>
+const CITY = {
+  then:"Citywide, New York recorded <b>2,245 murders in 1990</b>, its all-time high, and the early ’90s were the tail end of the crack era.",
+  now:"Citywide murders have fallen to <b>fewer than 400 a year</b> recently, while rents and home prices have climbed to among the highest in the country."
+};
+
+const PLACES = [
+  { id:"qb", name:"Queensbridge Houses", short:"Queensbridge", where:"Long Island City, Queens", lat:40.7556711, lng:-73.9456723, pid:"ChIJ00HN1tBYwokRI0GnODV9WHY",
+    songs:"“Memory Lane”, “Represent”, “Queens Story”",
+    then:"Illmatic was written about these blocks. Queensbridge opened in 1939 as 26 six-story buildings with about 3,100 apartments, the largest public housing development in the country. The crack era hit it hard, and it was also producing a remarkable run of artists: Marley Marl, MC Shan, Mobb Deep, Cormega and Nas.",
+    now:"Still public housing, still the largest development in North America, run by NYCHA, which faces a massive repair backlog across its buildings. The biggest change is around it: glass towers now ring the projects, and in 2018–19 Queensbridge was at the center of the fight over Amazon’s planned Long Island City headquarters, which Amazon dropped in 2019.",
+    shift:"The buildings stayed the same. The neighborhood around them didn’t." },
+  { id:"bridge", name:"Ed Koch Queensboro Bridge", short:"Queensboro Bridge", where:"Between Queens and Manhattan", lat:40.7569256, lng:-73.9547629, pid:"ChIJmXfuBtlYwokRHTCz4s2sS_0",
+    songs:"Namesake of QB",
+    then:"Known as the Queensboro or 59th Street Bridge, and partway through a reconstruction that dragged on for decades. Queens Plaza at its foot was a gritty tangle of elevated tracks, parking lots and auto shops.",
+    now:"Renamed the Ed Koch Queensboro Bridge in 2011. Queens Plaza was redesigned with bike lanes and plantings, office and apartment towers crowd the Queens side, and Cornell Tech opened on Roosevelt Island, right beside the bridge, in 2017.",
+    shift:"From a road you passed through to a destination people move to." },
+  { id:"vernon", name:"Vernon Boulevard", short:"Vernon Blvd", where:"Long Island City, Queens", lat:40.7530212, lng:-73.9504021, pid:null,
+    songs:"“Represent”",
+    then:"Long Island City’s waterfront was mostly factories, warehouses and rail yards, with the giant Pepsi-Cola sign glowing over a largely empty shoreline. Vernon was a working street, not a dining strip.",
+    now:"A 2001 rezoning set off a building boom, and LIC became one of the fastest-growing neighborhoods in the country. Gantry Plaza State Park (opened 1998) and Hunters Point South line the river with parks and high-rises, and the Pepsi-Cola sign became an official city landmark in 2016.",
+    shift:"Industrial waterfront turned into one of the city’s newest skylines." },
+  { id:"rikers", name:"Rikers Island", short:"Rikers", where:"East River, the Bronx", lat:40.7931277, lng:-73.88601, pid:"ChIJ395GkHD1wokRt6VeJ06Nc3k",
+    songs:"“One Love”",
+    then:"The city jail population peaked in the early ’90s at more than 20,000 people on a given day, most of them held on Rikers. That’s the world behind “One Love,” written as letters to friends locked up.",
+    now:"The daily jail population is down to roughly 6,000–7,000. In 2019 the City Council voted to close Rikers by 2027 and replace it with smaller borough jails, but the deadline is widely expected to slip, and conditions there remain under federal court oversight.",
+    shift:"About a third as many people inside, and a closure plan still in progress." },
+  { id:"marcy", name:"Marcy Houses", short:"Marcy", where:"Bedford-Stuyvesant, Brooklyn", lat:40.697574, lng:-73.9515473, pid:"ChIJsRUWje5bwokRdoZb0o9wTvQ",
+    songs:"“Ether” (the other side of the beef)",
+    then:"Bed-Stuy was hit hard by the crack epidemic. Marcy, a 27-building public housing development, was where Jay-Z grew up, and his 1996 debut Reasonable Doubt mapped it the way Illmatic mapped Queensbridge.",
+    now:"Bed-Stuy has become one of the most gentrified neighborhoods in the city. Brownstones that sold cheaply in the ’90s now go for millions, and the neighborhood’s Black population share has dropped sharply since 2000. Marcy itself is still public housing.",
+    shift:"The development stayed. Who can afford the blocks around it changed." }
+];
+
+let view = "k";
+const gframe = document.getElementById("gmap");
+const placesEl = document.getElementById("places");
+PLACES.forEach(pl => {
+  const b = document.createElement("button"); b.textContent = pl.short; b.dataset.id = pl.id;
+  b.onclick = () => select(pl); placesEl.appendChild(b);
+});
+
+function gmaps(pl){
+  const q = encodeURIComponent(pl.name + ", " + pl.where);
+  return `https://www.google.com/maps/search/?api=1&query=${q}` + (pl.pid ? `&query_place_id=${pl.pid}` : "");
+}
+const streetView = pl => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${pl.lat},${pl.lng}`;
+
+function render(){
+  document.getElementById("mapbox").dataset.era = era;
+  const card = document.getElementById("card"); card.dataset.era = era;
+  document.getElementById("year").textContent = era==="then" ? "1994" : "Today";
+  document.getElementById("city").innerHTML = CITY[era];
+  document.querySelectorAll(".era button").forEach(b => b.setAttribute("aria-pressed", b.dataset.era===era));
+  const src = `https://maps.google.com/maps?q=${current.lat},${current.lng}&z=16&t=${view}&output=embed`;
+  if(gframe.src !== src) gframe.src = src;
+  document.querySelectorAll(".view-toggle button").forEach(b => b.setAttribute("aria-pressed", b.dataset.view===view));
+  placesEl.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.id===current.id));
+  const pl = current;
+  card.innerHTML = `
+    <h2></h2><p class="where"></p><p class="songs"></p>
+    <p class="era-label">${era==="then" ? "In 1994" : "Today"}</p>
+    <p class="body"></p>
+    ${era==="now" ? `<p class="shift"></p>` : ""}
+    <div class="links">
+      <a href="${gmaps(pl)}" target="_blank" rel="noopener">Open in Google Maps</a>
+      <a href="${streetView(pl)}" target="_blank" rel="noopener">Street View</a>
+    </div>
+    <p class="tip">In Street View, click the clock icon at the top left to step back through older imagery.</p>`;
+  card.querySelector("h2").textContent = pl.name;
+  card.querySelector(".where").textContent = pl.where;
+  card.querySelector(".songs").textContent = "Connected songs: " + pl.songs;
+  card.querySelector(".body").textContent = pl[era];
+  if(era==="now") card.querySelector(".shift").textContent = pl.shift;
+}
+function select(pl){ current = pl; render(); }
+document.querySelectorAll(".view-toggle button").forEach(b => b.onclick = () => { view = b.dataset.view; render(); });
+document.querySelectorAll(".era button").forEach(b => b.onclick = () => { era = b.dataset.era; render(); });
+render();
+</script>
+</body>
+</html>
